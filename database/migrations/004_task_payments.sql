@@ -1,0 +1,3 @@
+ALTER TABLE assignments
+  ADD COLUMN payment BIGINT NOT NULL DEFAULT 0,
+  ADD COLUMN completed_at DATE NULL;

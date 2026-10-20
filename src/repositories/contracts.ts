@@ -1,7 +1,7 @@
 import type { Project } from "@/models/project";
 import type { AccountEntry } from "@/models/accounts";
 import type { Material, MaterialRequest, RequestStatus, StockItem } from "@/models/inventory";
-import type { AssignmentStatus, AttendanceRecord, Worker, WorkAssignment } from "@/models/hr";
+import type { AssignmentStatus, AttendanceRecord, PayrollPayment, Worker, WorkAssignment } from "@/models/hr";
 import type { Agent, Campaign, Lead, LeadStatus, Sale } from "@/models/sales";
 import type { ChangeRequest, ChangeStatus } from "@/models/changes";
 import type { PortalInfo } from "@/models/site";
@@ -41,7 +41,10 @@ export interface HrRepository {
   saveAttendance(record: AttendanceRecord): Promise<AttendanceRecord>;
   listAssignments(projectId: string): Promise<WorkAssignment[]>;
   saveAssignment(assignment: WorkAssignment): Promise<WorkAssignment>;
-  setAssignmentStatus(id: string, status: AssignmentStatus): Promise<WorkAssignment | null>;
+  setAssignmentStatus(id: string, status: AssignmentStatus, completedAt: string | null): Promise<WorkAssignment | null>;
+  removeAssignment(id: string): Promise<boolean>;
+  listPayments(projectId: string): Promise<PayrollPayment[]>;
+  savePayment(payment: PayrollPayment): Promise<PayrollPayment>;
 }
 
 export interface SalesRepository {

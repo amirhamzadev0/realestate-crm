@@ -1,0 +1,2 @@
+ALTER TABLE assignments
+  ADD COLUMN assigned_at DATE NOT NULL DEFAULT (CURRENT_DATE);

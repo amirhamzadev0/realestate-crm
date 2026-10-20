@@ -1,4 +1,4 @@
-import type { AssignmentStatus, AttendanceRecord, Worker, WorkAssignment } from "@/models/hr";
+import type { AssignmentStatus, AttendanceRecord, PayrollPayment, Worker, WorkAssignment } from "@/models/hr";
 import type { HrRepository } from "@/repositories/contracts";
 import { getStore, upsert } from "./store";
 
@@ -19,6 +19,7 @@ export class MockHrRepository implements HrRepository {
     store.workers = store.workers.filter((w) => w.id !== id);
     store.assignments = store.assignments.filter((a) => a.workerId !== id);
     store.attendance = store.attendance.filter((a) => a.workerId !== id);
+    store.payments = store.payments.filter((p) => p.workerId !== id);
     return store.workers.length < before;
   }
   async listAttendance(projectId: string) {
@@ -35,10 +36,24 @@ export class MockHrRepository implements HrRepository {
   async saveAssignment(assignment: WorkAssignment) {
     return upsert(getStore().assignments, assignment);
   }
-  async setAssignmentStatus(id: string, status: AssignmentStatus) {
+  async setAssignmentStatus(id: string, status: AssignmentStatus, completedAt: string | null) {
     const found = getStore().assignments.find((a) => a.id === id);
     if (!found) return null;
     found.status = status;
+    if (completedAt) found.completedAt = completedAt;
+    else delete found.completedAt;
     return structuredClone(found);
+  }
+  async listPayments(projectId: string) {
+    return structuredClone(getStore().payments.filter((p) => p.projectId === projectId));
+  }
+  async savePayment(payment: PayrollPayment) {
+    return upsert(getStore().payments, payment);
+  }
+  async removeAssignment(id: string) {
+    const store = getStore();
+    const before = store.assignments.length;
+    store.assignments = store.assignments.filter((a) => a.id !== id);
+    return store.assignments.length < before;
   }
 }

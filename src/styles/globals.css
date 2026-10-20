@@ -226,6 +226,12 @@ img {
   color: #8a1c1c;
 }
 
+.inline-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* ---------- ui primitives ---------- */
 .page-header {
   display: flex;

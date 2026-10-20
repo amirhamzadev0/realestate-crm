@@ -29,10 +29,11 @@ export default async function ProjectOverviewPage({ params }: Props) {
       <AccountSummaryCards summary={accounts} />
 
       <h2 className="section-title">HR</h2>
-      <div className="grid grid--3">
+      <div className="grid grid--4">
         <StatCard label="Employees" value={String(hr.employees)} />
         <StatCard label="Labour" value={String(hr.labour)} />
-        <StatCard label="Payroll this month" value={formatCompactMoney(hr.monthlyPayroll)} />
+        <StatCard label="Payroll paid this month" value={formatCompactMoney(hr.monthlyPayroll)} />
+        <StatCard label="Pending salaries" value={formatCompactMoney(hr.pendingPayroll)} tone={hr.pendingCount ? "negative" : "default"} />
       </div>
 
       <Card title="Low stock on site">

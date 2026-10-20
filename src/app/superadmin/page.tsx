@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { NewWarehouseItemForm } from "@/components/forms/NewWarehouseItemForm";
 import { ReceiveStockForm } from "@/components/forms/ReceiveStockForm";
+import { PayrollTable } from "@/components/hr/PayrollTable";
 import { ChangeRequestTable } from "@/components/people/ChangeRequestTable";
 import { RequestTable } from "@/components/inventory/RequestTable";
 import { StockTable } from "@/components/inventory/StockTable";
@@ -45,6 +46,10 @@ export default async function SuperAdminPage() {
 
       <Card title="People changes waiting">
         <ChangeRequestTable requests={data.pendingPeople} mode="approve" />
+      </Card>
+
+      <Card title="Salaries waiting to be paid">
+        <PayrollTable items={data.pendingPayroll} mode="pending" canPay projectNames={data.projectNames} />
       </Card>
 
       <h2 className="section-title">Projects</h2>

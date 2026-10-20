@@ -17,6 +17,7 @@ export function AssignTaskForm({ projectId, workers }: { projectId: string; work
         },
         { name: "task", label: "Task", type: "text", required: true },
         { name: "dueDate", label: "Due date", type: "date", required: true },
+        { name: "payment", label: "Payment for this task (PKR)", type: "number" },
       ]}
     />
   );

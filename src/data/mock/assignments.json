@@ -5,7 +5,9 @@
     "workerId": "w1",
     "task": "Inspect block B slab reinforcement",
     "status": "in-progress",
-    "dueDate": "2026-10-20"
+    "dueDate": "2026-10-20",
+    "payment": 12000,
+    "assignedAt": "2026-10-12"
   },
   {
     "id": "a2",
@@ -13,7 +15,9 @@
     "workerId": "w3",
     "task": "Brickwork, block A floor 3",
     "status": "in-progress",
-    "dueDate": "2026-10-25"
+    "dueDate": "2026-10-25",
+    "payment": 18000,
+    "assignedAt": "2026-10-14"
   },
   {
     "id": "a3",
@@ -21,7 +25,9 @@
     "workerId": "w4",
     "task": "Conduit laying, block A floor 2",
     "status": "todo",
-    "dueDate": "2026-10-28"
+    "dueDate": "2026-10-28",
+    "payment": 9000,
+    "assignedAt": "2026-10-16"
   },
   {
     "id": "a4",
@@ -29,7 +35,10 @@
     "workerId": "w5",
     "task": "Water line, block A basement",
     "status": "done",
-    "dueDate": "2026-10-10"
+    "dueDate": "2026-10-10",
+    "payment": 15000,
+    "completedAt": "2026-10-15",
+    "assignedAt": "2026-10-08"
   },
   {
     "id": "a5",
@@ -37,6 +46,8 @@
     "workerId": "w7",
     "task": "Column steel, floor 6",
     "status": "in-progress",
-    "dueDate": "2026-10-22"
+    "dueDate": "2026-10-22",
+    "payment": 20000,
+    "assignedAt": "2026-10-15"
   }
 ]

@@ -186,6 +186,16 @@ export const operations: Record<string, Operation> = {
       return hrService.setTaskStatus(data.id, data.status);
     },
   },
+  payPayroll: { method: "POST", access: ADMIN, handler: (i) => hrService.pay(i) },
+  cancelTask: {
+    method: "POST",
+    access: PROJECT,
+    handler: (i, user) => {
+      const id = z.object({ id: z.string().min(1) }).parse(i).id;
+      // A project admin can only cancel inside their own project; the lookup is limited to it.
+      return hrService.cancelTask(id, user.role === "project-admin" ? (user.projectId ?? "") : undefined);
+    },
+  },
   markAttendance: {
     method: "POST",
     access: PROJECT,

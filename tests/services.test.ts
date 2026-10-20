@@ -13,6 +13,8 @@ import { ChangeRequestService } from "@/services/change-request.service";
 import { HrService } from "@/services/hr.service";
 import { InventoryService } from "@/services/inventory.service";
 import { SalesService } from "@/services/sales.service";
+import { addMonths } from "@/utils/date";
+import { today } from "@/utils/id";
 
 const projects = new MockProjectRepository();
 const accounts = new AccountService(new MockAccountRepository(), projects);
@@ -84,6 +86,55 @@ describe("hr", () => {
     await assert.rejects(hr.addWorker({ projectId: "p1", name: "A", type: "labour", role: "Mason" }), ZodError);
     const added = await hr.addWorker({ projectId: "p1", name: "A", type: "labour", role: "Mason", dailyWage: 2000 });
     assert.equal(added.active, true);
+  });
+
+  it("cancels unfinished work but keeps completed work", async () => {
+    const task = await hr.assignTask({ projectId: "p1", workerId: "w1", task: "Test task", dueDate: "2026-10-30", payment: 4000 });
+    await hr.cancelTask(task.id);
+    assert.equal((await hr.listAssignments("p1")).some((a) => a.id === task.id), false);
+    await assert.rejects(hr.cancelTask("a4"), /cannot be cancelled/);
+  });
+
+  it("lists a monthly salary as pending one month after joining, not before", async () => {
+    const worker = await hr.addWorker({ projectId: "p1", name: "New Engineer", type: "employee", role: "engineer", monthlySalary: 100000 });
+    const pendingFor = async () => (await hr.pendingPayroll("p1")).filter((i) => i.workerId === worker.id);
+    assert.equal((await pendingFor()).length, 0);
+
+    getStore().workers.find((w) => w.id === worker.id)!.joinedAt = addMonths(today(), -2);
+    const items = await pendingFor();
+    assert.equal(items.length, 2);
+    assert.equal(items[0].amount, 100000);
+    assert.equal(items[0].dueDate, addMonths(today(), -1));
+  });
+
+  it("counts a payment in the payroll only after the Super Admin pays it", async () => {
+    const before = await hr.summary("p1");
+    const task = await hr.assignTask({ projectId: "p1", workerId: "w3", task: "Paid task", dueDate: "2026-10-30", payment: 7000 });
+    await hr.setTaskStatus(task.id, "done");
+
+    const done = await hr.summary("p1");
+    assert.equal(done.pendingPayroll, before.pendingPayroll + 7000);
+    assert.equal(done.monthlyPayroll, before.monthlyPayroll);
+
+    await hr.pay({ projectId: "p1", workerId: "w3", kind: "task", ref: task.id });
+    const paid = await hr.summary("p1");
+    assert.equal(paid.pendingPayroll, before.pendingPayroll);
+    assert.equal(paid.monthlyPayroll, before.monthlyPayroll + 7000);
+    assert.equal((await hr.paidPayroll("p1")).some((i) => i.ref === task.id && i.amount === 7000), true);
+
+    await assert.rejects(hr.pay({ projectId: "p1", workerId: "w3", kind: "task", ref: task.id }), /already paid/);
+    await assert.rejects(hr.pay({ projectId: "p1", workerId: "w3", kind: "task", ref: "nope" }), /Nothing is pending/);
+  });
+
+  it("groups completed work by day for the daily report", async () => {
+    const task = await hr.assignTask({ projectId: "p1", workerId: "w3", task: "Report task", dueDate: "2026-10-30", payment: 2500 });
+    await hr.setTaskStatus(task.id, "done");
+    const report = await hr.workReport("p1");
+    assert.equal(report.date, today());
+    assert.equal(report.items.some((i) => i.id === task.id), true);
+    assert.equal(report.total, report.items.reduce((sum, i) => sum + i.payment, 0));
+    assert.equal(report.days.find((d) => d.date === today())?.count, report.items.length);
+    assert.equal((await hr.workReport("p1", "2020-01-01")).items.length, 0);
   });
 
   it("removes a worker together with their tasks", async () => {

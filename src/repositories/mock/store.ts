@@ -7,6 +7,7 @@ import campaigns from "@/data/mock/campaigns.json";
 import leads from "@/data/mock/leads.json";
 import materialRequests from "@/data/mock/material-requests.json";
 import materials from "@/data/mock/materials.json";
+import payments from "@/data/mock/payments.json";
 import projects from "@/data/mock/projects.json";
 import sales from "@/data/mock/sales.json";
 import site from "@/data/mock/site.json";
@@ -15,7 +16,7 @@ import workers from "@/data/mock/workers.json";
 import type { AccountEntry } from "@/models/accounts";
 import type { ChangeRequest } from "@/models/changes";
 import type { Material, MaterialRequest, StockItem } from "@/models/inventory";
-import type { AttendanceRecord, Worker, WorkAssignment } from "@/models/hr";
+import type { AttendanceRecord, PayrollPayment, Worker, WorkAssignment } from "@/models/hr";
 import type { Project } from "@/models/project";
 import type { Agent, Campaign, Lead, Sale } from "@/models/sales";
 import type { PortalInfo } from "@/models/site";
@@ -30,6 +31,7 @@ export interface MockStore {
   workers: Worker[];
   attendance: AttendanceRecord[];
   assignments: WorkAssignment[];
+  payments: PayrollPayment[];
   agents: Agent[];
   campaigns: Campaign[];
   leads: Lead[];
@@ -57,6 +59,7 @@ export function getStore(): MockStore {
     workers,
     attendance,
     assignments,
+    payments,
     agents,
     campaigns,
     leads,

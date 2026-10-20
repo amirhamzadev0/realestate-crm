@@ -8,7 +8,8 @@
     "phone": "0300-1111111",
     "monthlySalary": 120000,
     "dailyWage": 0,
-    "active": true
+    "active": true,
+    "joinedAt": "2026-06-10"
   },
   {
     "id": "w2",
@@ -19,7 +20,8 @@
     "phone": "0300-2222222",
     "monthlySalary": 90000,
     "dailyWage": 0,
-    "active": true
+    "active": true,
+    "joinedAt": "2026-08-05"
   },
   {
     "id": "w3",
@@ -30,7 +32,8 @@
     "phone": "0311-3333333",
     "monthlySalary": 0,
     "dailyWage": 2500,
-    "active": true
+    "active": true,
+    "joinedAt": "2026-05-01"
   },
   {
     "id": "w4",
@@ -41,7 +44,8 @@
     "phone": "0311-4444444",
     "monthlySalary": 0,
     "dailyWage": 3000,
-    "active": true
+    "active": true,
+    "joinedAt": "2026-06-15"
   },
   {
     "id": "w5",
@@ -52,7 +56,8 @@
     "phone": "0311-5555555",
     "monthlySalary": 0,
     "dailyWage": 2800,
-    "active": true
+    "active": true,
+    "joinedAt": "2026-07-01"
   },
   {
     "id": "w6",
@@ -63,7 +68,8 @@
     "phone": "0300-6666666",
     "monthlySalary": 130000,
     "dailyWage": 0,
-    "active": true
+    "active": true,
+    "joinedAt": "2026-07-15"
   },
   {
     "id": "w7",
@@ -74,7 +80,8 @@
     "phone": "0311-7777777",
     "monthlySalary": 0,
     "dailyWage": 2700,
-    "active": true
+    "active": true,
+    "joinedAt": "2026-08-20"
   },
   {
     "id": "w8",
@@ -85,6 +92,7 @@
     "phone": "0300-8888888",
     "monthlySalary": 85000,
     "dailyWage": 0,
-    "active": true
+    "active": true,
+    "joinedAt": "2026-09-01"
   }
 ]

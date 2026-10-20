@@ -42,15 +42,18 @@ export const getProjectInventory = cache(async (slug: string) => {
   return { project, stock, requests, materials };
 });
 
-export const getProjectHr = cache(async (slug: string) => {
+export const getProjectHr = cache(async (slug: string, date?: string) => {
   const project = await projectService.findBySlug(slug);
   if (!project) return null;
-  const [summary, workers, assignments, changes] = await Promise.all([
+  const [summary, workers, assignments, changes, report, pending, paid] = await Promise.all([
     hrService.summary(project.id),
     hrService.listWorkers(project.id),
     hrService.listAssignments(project.id),
     changeRequestService.list({ projectId: project.id, kind: "worker" }),
+    hrService.workReport(project.id, date),
+    hrService.pendingPayroll(project.id),
+    hrService.paidPayroll(project.id),
   ]);
   const pendingIds = changes.filter((c) => c.status === "pending" && c.targetId).map((c) => c.targetId as string);
-  return { project, summary, workers, assignments, changes, pendingIds };
+  return { project, summary, workers, assignments, changes, pendingIds, report, pending, paid };
 });

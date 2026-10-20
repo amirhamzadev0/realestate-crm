@@ -59,6 +59,13 @@ Employee earns the fixed `monthlySalary`. Labour earns `dailyWage × days` where
 
 ---
 
+### Payroll rules (HR, current)
+
+- An employee's monthly salary falls due one month after `joinedAt`, then every month. A finished task's payment falls due when the task is marked done (daily-wage labour is paid this way).
+- Due amounts are **pending salaries** until the Super Admin pays them (`payPayroll`). Only paid amounts count in "Payroll paid this month".
+- Completed work is stored per day (`completedAt`); the HR page shows one day at a time (`?date=YYYY-MM-DD`) and a daily report table.
+- Attendance-based "Earned" in the staff table is informational and is not part of the payroll total.
+
 ## 2. Technology stack (Phase 1)
 
 | Area | Choice |

@@ -6,7 +6,7 @@ import { accountService, changeRequestService, hrService, inventoryService, proj
 export const getSuperAdminDashboard = cache(async () => {
   const projects = await projectService.list();
 
-  const [rows, pending, warehouse, report, pendingPeople, materials] = await Promise.all([
+  const [rows, pending, warehouse, report, pendingPeople, materials, pendingPayroll] = await Promise.all([
     Promise.all(
       projects.map(async (project) => {
         const [accounts, hr] = await Promise.all([accountService.summary(project.id), hrService.summary(project.id)]);
@@ -18,11 +18,14 @@ export const getSuperAdminDashboard = cache(async () => {
     salesService.report(),
     changeRequestService.list({ status: "pending" }),
     inventoryService.listMaterials(),
+    Promise.all(projects.map((project) => hrService.pendingPayroll(project.id))).then((lists) => lists.flat()),
   ]);
 
   return {
     rows,
     materials,
+    pendingPayroll,
+    projectNames: Object.fromEntries(projects.map((project) => [project.id, project.name])),
     warehouseStock: warehouse,
     pendingRequests: pending,
     pendingPeople,
