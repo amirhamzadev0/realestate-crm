@@ -1,0 +1,29 @@
+[
+  {
+    "id": "c1",
+    "name": "Green Valley - Launch Offer",
+    "platform": "facebook",
+    "projectId": "p1",
+    "budget": 250000,
+    "startDate": "2026-09-01",
+    "active": true
+  },
+  {
+    "id": "c2",
+    "name": "Skyline Heights - Penthouse",
+    "platform": "facebook",
+    "projectId": "p2",
+    "budget": 400000,
+    "startDate": "2026-09-15",
+    "active": true
+  },
+  {
+    "id": "c3",
+    "name": "Royal Gardens - Pre-launch",
+    "platform": "instagram",
+    "projectId": "p3",
+    "budget": 150000,
+    "startDate": "2026-10-01",
+    "active": false
+  }
+]

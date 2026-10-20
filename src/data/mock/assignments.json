@@ -1,0 +1,42 @@
+[
+  {
+    "id": "a1",
+    "projectId": "p1",
+    "workerId": "w1",
+    "task": "Inspect block B slab reinforcement",
+    "status": "in-progress",
+    "dueDate": "2026-10-20"
+  },
+  {
+    "id": "a2",
+    "projectId": "p1",
+    "workerId": "w3",
+    "task": "Brickwork, block A floor 3",
+    "status": "in-progress",
+    "dueDate": "2026-10-25"
+  },
+  {
+    "id": "a3",
+    "projectId": "p1",
+    "workerId": "w4",
+    "task": "Conduit laying, block A floor 2",
+    "status": "todo",
+    "dueDate": "2026-10-28"
+  },
+  {
+    "id": "a4",
+    "projectId": "p1",
+    "workerId": "w5",
+    "task": "Water line, block A basement",
+    "status": "done",
+    "dueDate": "2026-10-10"
+  },
+  {
+    "id": "a5",
+    "projectId": "p2",
+    "workerId": "w7",
+    "task": "Column steel, floor 6",
+    "status": "in-progress",
+    "dueDate": "2026-10-22"
+  }
+]

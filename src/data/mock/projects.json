@@ -1,0 +1,41 @@
+[
+  {
+    "id": "p1",
+    "slug": "green-valley",
+    "name": "Green Valley Residency",
+    "location": "Lahore, DHA Phase 9",
+    "status": "under-construction",
+    "startDate": "2025-03-01",
+    "totalUnits": 120,
+    "budget": 450000000,
+    "adminName": "Bilal Ahmed",
+    "image": "/assets/green-valley.jpg",
+    "order": 1
+  },
+  {
+    "id": "p2",
+    "slug": "skyline-heights",
+    "name": "Skyline Heights",
+    "location": "Islamabad, G-13",
+    "status": "under-construction",
+    "startDate": "2025-08-15",
+    "totalUnits": 80,
+    "budget": 620000000,
+    "adminName": "Sana Malik",
+    "image": "/assets/skyline-heights.jpg",
+    "order": 2
+  },
+  {
+    "id": "p3",
+    "slug": "royal-gardens",
+    "name": "Royal Gardens",
+    "location": "Karachi, Gulshan",
+    "status": "planning",
+    "startDate": "2026-01-10",
+    "totalUnits": 200,
+    "budget": 300000000,
+    "adminName": "Usman Tariq",
+    "image": "/assets/royal-gardens.jpg",
+    "order": 3
+  }
+]

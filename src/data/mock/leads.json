@@ -1,0 +1,79 @@
+[
+  {
+    "id": "l1",
+    "name": "Tariq Mehmood",
+    "phone": "0333-1000001",
+    "projectId": "p1",
+    "source": "facebook",
+    "campaignId": "c1",
+    "agentId": "ag1",
+    "status": "won",
+    "createdAt": "2026-09-05"
+  },
+  {
+    "id": "l2",
+    "name": "Sadia Noor",
+    "phone": "0333-1000002",
+    "projectId": "p1",
+    "source": "facebook",
+    "campaignId": "c1",
+    "agentId": "ag1",
+    "status": "negotiation",
+    "createdAt": "2026-09-12"
+  },
+  {
+    "id": "l3",
+    "name": "Waqas Butt",
+    "phone": "0333-1000003",
+    "projectId": "p2",
+    "source": "facebook",
+    "campaignId": "c2",
+    "agentId": "ag2",
+    "status": "won",
+    "createdAt": "2026-09-20"
+  },
+  {
+    "id": "l4",
+    "name": "Mina Khalid",
+    "phone": "0333-1000004",
+    "projectId": "p2",
+    "source": "facebook",
+    "campaignId": "c2",
+    "agentId": "ag2",
+    "status": "site-visit",
+    "createdAt": "2026-09-25"
+  },
+  {
+    "id": "l5",
+    "name": "Danish Iqbal",
+    "phone": "0333-1000005",
+    "projectId": "p2",
+    "source": "referral",
+    "campaignId": null,
+    "agentId": "ag3",
+    "status": "contacted",
+    "createdAt": "2026-10-02"
+  },
+  {
+    "id": "l6",
+    "name": "Farah Naz",
+    "phone": "0333-1000006",
+    "projectId": "p3",
+    "source": "instagram",
+    "campaignId": "c3",
+    "agentId": null,
+    "status": "new",
+    "createdAt": "2026-10-08"
+  },
+  {
+    "id": "l7",
+    "name": "Rehan Shah",
+    "phone": "0333-1000007",
+    "projectId": "p1",
+    "source": "walk-in",
+    "campaignId": null,
+    "agentId": "ag3",
+    "status": "lost",
+    "createdAt": "2026-09-30"
+  }
+]

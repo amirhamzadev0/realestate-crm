@@ -1,0 +1,44 @@
+[
+  {
+    "id": "m1",
+    "name": "Steel",
+    "category": "structure",
+    "unit": "ton"
+  },
+  {
+    "id": "m2",
+    "name": "Cement",
+    "category": "structure",
+    "unit": "bag"
+  },
+  {
+    "id": "m3",
+    "name": "Premix",
+    "category": "structure",
+    "unit": "m3"
+  },
+  {
+    "id": "m4",
+    "name": "Bricks",
+    "category": "structure",
+    "unit": "pcs"
+  },
+  {
+    "id": "m5",
+    "name": "Plumbing Pipes",
+    "category": "plumbing",
+    "unit": "pcs"
+  },
+  {
+    "id": "m6",
+    "name": "Electrical Wire",
+    "category": "electrical",
+    "unit": "coil"
+  },
+  {
+    "id": "m7",
+    "name": "Floor Tiles",
+    "category": "finishing",
+    "unit": "box"
+  }
+]

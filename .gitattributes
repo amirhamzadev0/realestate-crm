@@ -1,0 +1,5 @@
+* text=auto
+*.sh eol=lf
+*.mjs eol=lf
+*.yml eol=lf
+*.sql eol=lf

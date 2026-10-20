@@ -1,0 +1,46 @@
+[
+  {
+    "id": "r1",
+    "projectId": "p1",
+    "materialId": "m3",
+    "quantity": 200,
+    "note": "Slab pour next week",
+    "requestedBy": "Bilal Ahmed",
+    "createdAt": "2026-10-12",
+    "status": "pending"
+  },
+  {
+    "id": "r2",
+    "projectId": "p2",
+    "materialId": "m1",
+    "quantity": 50,
+    "note": "Columns for floors 6-8",
+    "requestedBy": "Sana Malik",
+    "createdAt": "2026-10-10",
+    "status": "pending"
+  },
+  {
+    "id": "r3",
+    "projectId": "p1",
+    "materialId": "m2",
+    "quantity": 3000,
+    "note": "Plastering",
+    "requestedBy": "Bilal Ahmed",
+    "createdAt": "2026-10-02",
+    "status": "approved",
+    "decisionNote": "Approved, issue from warehouse",
+    "decidedAt": "2026-10-03"
+  },
+  {
+    "id": "r4",
+    "projectId": "p3",
+    "materialId": "m7",
+    "quantity": 1000,
+    "note": "Finishing material",
+    "requestedBy": "Usman Tariq",
+    "createdAt": "2026-09-28",
+    "status": "rejected",
+    "decisionNote": "Request again at finishing stage",
+    "decidedAt": "2026-09-29"
+  }
+]

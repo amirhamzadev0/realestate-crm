@@ -1,0 +1,20 @@
+[Unit]
+Description=BuildFlow CRM (Next.js)
+After=network.target mysql.service
+
+[Service]
+User=buildflow
+WorkingDirectory=/var/www/buildflow/current
+EnvironmentFile=/var/www/buildflow/shared/app.env
+Environment=NODE_ENV=production HOSTNAME=127.0.0.1 PORT=3130
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/www/buildflow
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

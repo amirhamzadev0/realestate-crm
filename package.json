@@ -1,26 +1,40 @@
 {
-  "name": "crmrealestate",
+  "name": "realestate-crm",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --hostname 127.0.0.1 --port 3130",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "start": "next start --hostname 127.0.0.1 --port 3130",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/services.test.ts tests/auth.test.ts",
+    "format": "prettier --write \"src/**/*.ts\" \"src/**/*.tsx\" src/styles/globals.css \"tests/**/*.ts\"",
+    "users:setup": "node scripts/setup-users.mjs",
+    "db:prepare": "node scripts/setup-database.mjs",
+    "db:setup": "node scripts/setup-database.mjs --apply",
+    "db:migrate": "node scripts/ci/migrate.mjs",
+    "db:check": "node scripts/ci/check-schema.mjs",
+    "data:seed": "node scripts/seed-data.mjs",
+    "db:start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/db-start.ps1"
   },
   "dependencies": {
+    "lucide-react": "^1.59.0",
+    "mysql2": "^3.24.6",
     "next": "16.4.2",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.4.2",
-    "tailwindcss": "^4",
+    "prettier": "^3",
+    "tsx": "^4",
     "typescript": "^5"
   }
 }

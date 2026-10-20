@@ -1,0 +1,29 @@
+[
+  {
+    "id": "sl1",
+    "projectId": "p1",
+    "agentId": "ag1",
+    "leadId": "l1",
+    "unit": "Flat A-304",
+    "price": 18500000,
+    "date": "2026-09-28"
+  },
+  {
+    "id": "sl2",
+    "projectId": "p2",
+    "agentId": "ag2",
+    "leadId": "l3",
+    "unit": "Apt 7B",
+    "price": 24000000,
+    "date": "2026-10-05"
+  },
+  {
+    "id": "sl3",
+    "projectId": "p1",
+    "agentId": "ag3",
+    "leadId": null,
+    "unit": "Flat B-101",
+    "price": 17200000,
+    "date": "2026-10-09"
+  }
+]

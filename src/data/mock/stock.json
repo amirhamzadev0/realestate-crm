@@ -1,0 +1,119 @@
+[
+  {
+    "id": "s1",
+    "scope": "warehouse",
+    "projectId": null,
+    "materialId": "m1",
+    "quantity": 400,
+    "used": 0,
+    "minLevel": 100
+  },
+  {
+    "id": "s2",
+    "scope": "warehouse",
+    "projectId": null,
+    "materialId": "m2",
+    "quantity": 12000,
+    "used": 0,
+    "minLevel": 3000
+  },
+  {
+    "id": "s3",
+    "scope": "warehouse",
+    "projectId": null,
+    "materialId": "m3",
+    "quantity": 900,
+    "used": 0,
+    "minLevel": 200
+  },
+  {
+    "id": "s4",
+    "scope": "warehouse",
+    "projectId": null,
+    "materialId": "m4",
+    "quantity": 250000,
+    "used": 0,
+    "minLevel": 50000
+  },
+  {
+    "id": "s5",
+    "scope": "warehouse",
+    "projectId": null,
+    "materialId": "m5",
+    "quantity": 1500,
+    "used": 0,
+    "minLevel": 400
+  },
+  {
+    "id": "s6",
+    "scope": "warehouse",
+    "projectId": null,
+    "materialId": "m6",
+    "quantity": 90,
+    "used": 0,
+    "minLevel": 100
+  },
+  {
+    "id": "s7",
+    "scope": "warehouse",
+    "projectId": null,
+    "materialId": "m7",
+    "quantity": 3000,
+    "used": 0,
+    "minLevel": 500
+  },
+  {
+    "id": "s8",
+    "scope": "project",
+    "projectId": "p1",
+    "materialId": "m1",
+    "quantity": 60,
+    "used": 140,
+    "minLevel": 40
+  },
+  {
+    "id": "s9",
+    "scope": "project",
+    "projectId": "p1",
+    "materialId": "m2",
+    "quantity": 1800,
+    "used": 6200,
+    "minLevel": 1000
+  },
+  {
+    "id": "s10",
+    "scope": "project",
+    "projectId": "p1",
+    "materialId": "m3",
+    "quantity": 25,
+    "used": 310,
+    "minLevel": 50
+  },
+  {
+    "id": "s11",
+    "scope": "project",
+    "projectId": "p2",
+    "materialId": "m1",
+    "quantity": 90,
+    "used": 55,
+    "minLevel": 40
+  },
+  {
+    "id": "s12",
+    "scope": "project",
+    "projectId": "p2",
+    "materialId": "m2",
+    "quantity": 4000,
+    "used": 2500,
+    "minLevel": 1000
+  },
+  {
+    "id": "s13",
+    "scope": "project",
+    "projectId": "p3",
+    "materialId": "m4",
+    "quantity": 20000,
+    "used": 0,
+    "minLevel": 5000
+  }
+]

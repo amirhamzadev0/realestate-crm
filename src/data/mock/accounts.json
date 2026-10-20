@@ -1,0 +1,506 @@
+[
+  {
+    "id": "ac40",
+    "projectId": "p2",
+    "date": "2026-10-26",
+    "type": "credit",
+    "amount": 786000,
+    "description": "Investor installment",
+    "party": "Buyer"
+  },
+  {
+    "id": "ac17",
+    "projectId": "p1",
+    "date": "2026-10-25",
+    "type": "purchase",
+    "amount": 4557000,
+    "description": "Premix purchase",
+    "party": "City Steel"
+  },
+  {
+    "id": "ac25",
+    "projectId": "p2",
+    "date": "2026-10-25",
+    "type": "purchase",
+    "amount": 4781000,
+    "description": "Premix purchase",
+    "party": "Habib Bank"
+  },
+  {
+    "id": "ac29",
+    "projectId": "p2",
+    "date": "2026-10-25",
+    "type": "sale",
+    "amount": 1158000,
+    "description": "Unit installment",
+    "party": "Al-Noor Traders"
+  },
+  {
+    "id": "ac48",
+    "projectId": "p2",
+    "date": "2026-10-25",
+    "type": "debit",
+    "amount": 3743000,
+    "description": "Loan repayment",
+    "party": "Buyer"
+  },
+  {
+    "id": "ac44",
+    "projectId": "p2",
+    "date": "2026-10-24",
+    "type": "expense",
+    "amount": 4045000,
+    "description": "Permits and fees",
+    "party": "Habib Bank"
+  },
+  {
+    "id": "ac2",
+    "projectId": "p1",
+    "date": "2026-10-22",
+    "type": "debit",
+    "amount": 2806000,
+    "description": "Loan repayment",
+    "party": "Buyer"
+  },
+  {
+    "id": "ac23",
+    "projectId": "p1",
+    "date": "2026-10-22",
+    "type": "credit",
+    "amount": 3628000,
+    "description": "Investor installment",
+    "party": "Al-Noor Traders"
+  },
+  {
+    "id": "ac34",
+    "projectId": "p2",
+    "date": "2026-10-22",
+    "type": "credit",
+    "amount": 4594000,
+    "description": "Bank financing tranche",
+    "party": "Buyer"
+  },
+  {
+    "id": "ac26",
+    "projectId": "p2",
+    "date": "2026-10-21",
+    "type": "debit",
+    "amount": 2112000,
+    "description": "Contractor payment",
+    "party": "Habib Bank"
+  },
+  {
+    "id": "ac5",
+    "projectId": "p1",
+    "date": "2026-10-20",
+    "type": "purchase",
+    "amount": 2972000,
+    "description": "Premix purchase",
+    "party": "Ravi Contractors"
+  },
+  {
+    "id": "ac50",
+    "projectId": "p3",
+    "date": "2026-10-20",
+    "type": "sale",
+    "amount": 2327000,
+    "description": "Unit installment",
+    "party": "Habib Bank"
+  },
+  {
+    "id": "ac12",
+    "projectId": "p1",
+    "date": "2026-10-18",
+    "type": "purchase",
+    "amount": 2678000,
+    "description": "Tiles purchase",
+    "party": "Buyer"
+  },
+  {
+    "id": "ac46",
+    "projectId": "p2",
+    "date": "2026-10-18",
+    "type": "sale",
+    "amount": 4446000,
+    "description": "Unit installment",
+    "party": "Ravi Contractors"
+  },
+  {
+    "id": "ac56",
+    "projectId": "p3",
+    "date": "2026-10-17",
+    "type": "purchase",
+    "amount": 815000,
+    "description": "Steel purchase",
+    "party": "Buyer"
+  },
+  {
+    "id": "ac30",
+    "projectId": "p2",
+    "date": "2026-10-16",
+    "type": "expense",
+    "amount": 4740000,
+    "description": "Fuel and transport",
+    "party": "Al-Noor Traders"
+  },
+  {
+    "id": "ac11",
+    "projectId": "p1",
+    "date": "2026-10-15",
+    "type": "debit",
+    "amount": 1320000,
+    "description": "Loan repayment",
+    "party": "Habib Bank"
+  },
+  {
+    "id": "ac4",
+    "projectId": "p1",
+    "date": "2026-10-14",
+    "type": "sale",
+    "amount": 4076000,
+    "description": "Unit booking",
+    "party": "Habib Bank"
+  },
+  {
+    "id": "ac19",
+    "projectId": "p1",
+    "date": "2026-10-14",
+    "type": "sale",
+    "amount": 1343000,
+    "description": "Unit installment",
+    "party": "City Steel"
+  },
+  {
+    "id": "ac47",
+    "projectId": "p2",
+    "date": "2026-10-14",
+    "type": "expense",
+    "amount": 4880000,
+    "description": "Fuel and transport",
+    "party": "Al-Noor Traders"
+  },
+  {
+    "id": "ac38",
+    "projectId": "p2",
+    "date": "2026-10-13",
+    "type": "debit",
+    "amount": 2228000,
+    "description": "Loan repayment",
+    "party": "Buyer"
+  },
+  {
+    "id": "ac13",
+    "projectId": "p1",
+    "date": "2026-10-12",
+    "type": "purchase",
+    "amount": 1405000,
+    "description": "Tiles purchase",
+    "party": "City Steel"
+  },
+  {
+    "id": "ac14",
+    "projectId": "p1",
+    "date": "2026-10-11",
+    "type": "debit",
+    "amount": 4412000,
+    "description": "Contractor payment",
+    "party": "Ravi Contractors"
+  },
+  {
+    "id": "ac32",
+    "projectId": "p2",
+    "date": "2026-10-11",
+    "type": "sale",
+    "amount": 325000,
+    "description": "Unit booking",
+    "party": "Habib Bank"
+  },
+  {
+    "id": "ac6",
+    "projectId": "p1",
+    "date": "2026-10-10",
+    "type": "debit",
+    "amount": 1795000,
+    "description": "Contractor payment",
+    "party": "City Steel"
+  },
+  {
+    "id": "ac7",
+    "projectId": "p1",
+    "date": "2026-10-09",
+    "type": "expense",
+    "amount": 2875000,
+    "description": "Permits and fees",
+    "party": "Ravi Contractors"
+  },
+  {
+    "id": "ac8",
+    "projectId": "p1",
+    "date": "2026-10-08",
+    "type": "credit",
+    "amount": 2642000,
+    "description": "Investor installment",
+    "party": "Al-Noor Traders"
+  },
+  {
+    "id": "ac51",
+    "projectId": "p3",
+    "date": "2026-10-08",
+    "type": "purchase",
+    "amount": 2283000,
+    "description": "Steel purchase",
+    "party": "Al-Noor Traders"
+  },
+  {
+    "id": "ac49",
+    "projectId": "p3",
+    "date": "2026-10-07",
+    "type": "debit",
+    "amount": 700000,
+    "description": "Loan repayment",
+    "party": "Ravi Contractors"
+  },
+  {
+    "id": "ac52",
+    "projectId": "p3",
+    "date": "2026-10-07",
+    "type": "expense",
+    "amount": 4146000,
+    "description": "Fuel and transport",
+    "party": "Buyer"
+  },
+  {
+    "id": "ac31",
+    "projectId": "p2",
+    "date": "2026-10-05",
+    "type": "expense",
+    "amount": 2704000,
+    "description": "Permits and fees",
+    "party": "Habib Bank"
+  },
+  {
+    "id": "ac35",
+    "projectId": "p2",
+    "date": "2026-10-01",
+    "type": "purchase",
+    "amount": 3085000,
+    "description": "Tiles purchase",
+    "party": "Ravi Contractors"
+  },
+  {
+    "id": "ac54",
+    "projectId": "p3",
+    "date": "2026-10-01",
+    "type": "debit",
+    "amount": 4510000,
+    "description": "Contractor payment",
+    "party": "City Steel"
+  },
+  {
+    "id": "ac37",
+    "projectId": "p2",
+    "date": "2026-09-27",
+    "type": "sale",
+    "amount": 842000,
+    "description": "Unit booking",
+    "party": "Buyer"
+  },
+  {
+    "id": "ac1",
+    "projectId": "p1",
+    "date": "2026-09-26",
+    "type": "credit",
+    "amount": 1211000,
+    "description": "Bank financing tranche",
+    "party": "Habib Bank"
+  },
+  {
+    "id": "ac20",
+    "projectId": "p1",
+    "date": "2026-09-26",
+    "type": "debit",
+    "amount": 2548000,
+    "description": "Contractor payment",
+    "party": "Ravi Contractors"
+  },
+  {
+    "id": "ac21",
+    "projectId": "p1",
+    "date": "2026-09-26",
+    "type": "sale",
+    "amount": 4520000,
+    "description": "Unit booking",
+    "party": "Ravi Contractors"
+  },
+  {
+    "id": "ac24",
+    "projectId": "p1",
+    "date": "2026-09-26",
+    "type": "credit",
+    "amount": 3502000,
+    "description": "Bank financing tranche",
+    "party": "Al-Noor Traders"
+  },
+  {
+    "id": "ac33",
+    "projectId": "p2",
+    "date": "2026-09-21",
+    "type": "debit",
+    "amount": 1331000,
+    "description": "Loan repayment",
+    "party": "Habib Bank"
+  },
+  {
+    "id": "ac22",
+    "projectId": "p1",
+    "date": "2026-09-20",
+    "type": "expense",
+    "amount": 1269000,
+    "description": "Site electricity",
+    "party": "Habib Bank"
+  },
+  {
+    "id": "ac55",
+    "projectId": "p3",
+    "date": "2026-09-20",
+    "type": "purchase",
+    "amount": 761000,
+    "description": "Tiles purchase",
+    "party": "Al-Noor Traders"
+  },
+  {
+    "id": "ac27",
+    "projectId": "p2",
+    "date": "2026-09-16",
+    "type": "purchase",
+    "amount": 3183000,
+    "description": "Tiles purchase",
+    "party": "City Steel"
+  },
+  {
+    "id": "ac15",
+    "projectId": "p1",
+    "date": "2026-09-12",
+    "type": "credit",
+    "amount": 574000,
+    "description": "Bank financing tranche",
+    "party": "City Steel"
+  },
+  {
+    "id": "ac28",
+    "projectId": "p2",
+    "date": "2026-09-12",
+    "type": "sale",
+    "amount": 1696000,
+    "description": "Unit installment",
+    "party": "Ravi Contractors"
+  },
+  {
+    "id": "ac39",
+    "projectId": "p2",
+    "date": "2026-09-12",
+    "type": "debit",
+    "amount": 1305000,
+    "description": "Loan repayment",
+    "party": "Ravi Contractors"
+  },
+  {
+    "id": "ac45",
+    "projectId": "p2",
+    "date": "2026-09-12",
+    "type": "debit",
+    "amount": 2575000,
+    "description": "Loan repayment",
+    "party": "Buyer"
+  },
+  {
+    "id": "ac3",
+    "projectId": "p1",
+    "date": "2026-09-07",
+    "type": "purchase",
+    "amount": 3598000,
+    "description": "Tiles purchase",
+    "party": "Al-Noor Traders"
+  },
+  {
+    "id": "ac18",
+    "projectId": "p1",
+    "date": "2026-09-07",
+    "type": "credit",
+    "amount": 208000,
+    "description": "Bank financing tranche",
+    "party": "City Steel"
+  },
+  {
+    "id": "ac10",
+    "projectId": "p1",
+    "date": "2026-09-05",
+    "type": "expense",
+    "amount": 1561000,
+    "description": "Fuel and transport",
+    "party": "Habib Bank"
+  },
+  {
+    "id": "ac16",
+    "projectId": "p1",
+    "date": "2026-09-05",
+    "type": "sale",
+    "amount": 3046000,
+    "description": "Unit booking",
+    "party": "Ravi Contractors"
+  },
+  {
+    "id": "ac36",
+    "projectId": "p2",
+    "date": "2026-09-04",
+    "type": "credit",
+    "amount": 720000,
+    "description": "Investor installment",
+    "party": "Al-Noor Traders"
+  },
+  {
+    "id": "ac53",
+    "projectId": "p3",
+    "date": "2026-09-04",
+    "type": "purchase",
+    "amount": 4620000,
+    "description": "Cement purchase",
+    "party": "Al-Noor Traders"
+  },
+  {
+    "id": "ac41",
+    "projectId": "p2",
+    "date": "2026-09-03",
+    "type": "credit",
+    "amount": 3303000,
+    "description": "Bank financing tranche",
+    "party": "Habib Bank"
+  },
+  {
+    "id": "ac42",
+    "projectId": "p2",
+    "date": "2026-09-03",
+    "type": "purchase",
+    "amount": 1709000,
+    "description": "Cement purchase",
+    "party": "Al-Noor Traders"
+  },
+  {
+    "id": "ac43",
+    "projectId": "p2",
+    "date": "2026-09-03",
+    "type": "expense",
+    "amount": 4636000,
+    "description": "Security",
+    "party": "Buyer"
+  },
+  {
+    "id": "ac9",
+    "projectId": "p1",
+    "date": "2026-09-02",
+    "type": "purchase",
+    "amount": 1852000,
+    "description": "Tiles purchase",
+    "party": "Ravi Contractors"
+  }
+]

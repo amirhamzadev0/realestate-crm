@@ -1,0 +1,90 @@
+[
+  {
+    "id": "w1",
+    "projectId": "p1",
+    "name": "Imran Khan",
+    "type": "employee",
+    "role": "Site Engineer",
+    "phone": "0300-1111111",
+    "monthlySalary": 120000,
+    "dailyWage": 0,
+    "active": true
+  },
+  {
+    "id": "w2",
+    "projectId": "p1",
+    "name": "Nadia Hussain",
+    "type": "employee",
+    "role": "Accountant",
+    "phone": "0300-2222222",
+    "monthlySalary": 90000,
+    "dailyWage": 0,
+    "active": true
+  },
+  {
+    "id": "w3",
+    "projectId": "p1",
+    "name": "Rafiq",
+    "type": "labour",
+    "role": "Mason",
+    "phone": "0311-3333333",
+    "monthlySalary": 0,
+    "dailyWage": 2500,
+    "active": true
+  },
+  {
+    "id": "w4",
+    "projectId": "p1",
+    "name": "Shahid",
+    "type": "labour",
+    "role": "Electrician",
+    "phone": "0311-4444444",
+    "monthlySalary": 0,
+    "dailyWage": 3000,
+    "active": true
+  },
+  {
+    "id": "w5",
+    "projectId": "p1",
+    "name": "Akram",
+    "type": "labour",
+    "role": "Plumber",
+    "phone": "0311-5555555",
+    "monthlySalary": 0,
+    "dailyWage": 2800,
+    "active": true
+  },
+  {
+    "id": "w6",
+    "projectId": "p2",
+    "name": "Faisal Raza",
+    "type": "employee",
+    "role": "Site Engineer",
+    "phone": "0300-6666666",
+    "monthlySalary": 130000,
+    "dailyWage": 0,
+    "active": true
+  },
+  {
+    "id": "w7",
+    "projectId": "p2",
+    "name": "Kamran",
+    "type": "labour",
+    "role": "Steel Fixer",
+    "phone": "0311-7777777",
+    "monthlySalary": 0,
+    "dailyWage": 2700,
+    "active": true
+  },
+  {
+    "id": "w8",
+    "projectId": "p3",
+    "name": "Zahid",
+    "type": "employee",
+    "role": "Supervisor",
+    "phone": "0300-8888888",
+    "monthlySalary": 85000,
+    "dailyWage": 0,
+    "active": true
+  }
+]

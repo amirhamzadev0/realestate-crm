@@ -1,0 +1,50 @@
+stages: [build, deploy]
+
+build:
+  stage: build
+  image: node:22-bookworm
+  services:
+    - name: mysql:8.0
+      alias: mysql
+      command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+  variables:
+    MYSQL_DATABASE: buildflow_ci
+    MYSQL_ROOT_PASSWORD: ci-only-password
+    DATABASE_URL: mysql://root:ci-only-password@mysql:3306/buildflow_ci
+    DATA_STORAGE: mock
+    APP_ORIGIN: http://127.0.0.1:3130
+  script:
+    - npm ci
+    - node scripts/ci/wait-db.mjs
+    - node scripts/ci/migrate.mjs
+    - node scripts/ci/migrate.mjs # second run proves migrations are idempotent
+    - node scripts/ci/check-schema.mjs
+    - node scripts/seed-data.mjs
+    - npm test
+    - npm run typecheck
+    - npm run build
+    - node scripts/ci/package.mjs
+    - tar -czf dist/runtime.tar.gz -C dist/runtime .
+    - (cd dist && sha256sum runtime.tar.gz > runtime.tar.gz.sha256)
+  artifacts:
+    paths: [dist/runtime.tar.gz, dist/runtime.tar.gz.sha256, scripts/ci/deploy.sh]
+    expire_in: 7 days
+
+deploy_production:
+  stage: deploy
+  image: node:22-bookworm
+  needs: [build]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+  resource_group: production
+  variables:
+    # Set in Settings > CI/CD > Variables (Protected): SSH_PRIVATE_KEY (file), SSH_KNOWN_HOSTS (file),
+    # DEPLOY_HOST, DEPLOY_USER.
+    SSH_KEY_FILE: $SSH_PRIVATE_KEY
+    SSH_KNOWN_HOSTS_FILE: $SSH_KNOWN_HOSTS
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq openssh-client
+    - chmod 600 "$SSH_KEY_FILE"
+  script:
+    - bash scripts/ci/deploy.sh

@@ -1,0 +1,23 @@
+[
+  {
+    "id": "ag1",
+    "name": "Hassan Ali",
+    "phone": "0321-1010101",
+    "commissionRate": 2,
+    "active": true
+  },
+  {
+    "id": "ag2",
+    "name": "Ayesha Siddiqui",
+    "phone": "0321-2020202",
+    "commissionRate": 2.5,
+    "active": true
+  },
+  {
+    "id": "ag3",
+    "name": "Omar Farooq",
+    "phone": "0321-3030303",
+    "commissionRate": 2,
+    "active": true
+  }
+]
