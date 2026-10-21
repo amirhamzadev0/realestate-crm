@@ -1,3 +1,4 @@
+import type { Manager } from "@/models/manager";
 import type { Project } from "@/models/project";
 import type { AccountEntry } from "@/models/accounts";
 import type { Material, MaterialRequest, RequestStatus, StockItem } from "@/models/inventory";
@@ -14,6 +15,13 @@ export interface ProjectRepository {
   list(): Promise<Project[]>;
   findBySlug(slug: string): Promise<Project | null>;
   findById(id: string): Promise<Project | null>;
+  save(project: Project): Promise<Project>;
+}
+
+export interface ManagerRepository {
+  list(): Promise<Manager[]>;
+  find(id: string): Promise<Manager | null>;
+  save(manager: Manager): Promise<Manager>;
 }
 
 export interface AccountRepository {

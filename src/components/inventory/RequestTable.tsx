@@ -1,11 +1,11 @@
-import { ActionButton } from "@/components/forms/ActionButton";
 import { ApprovalActions } from "@/components/forms/ApprovalActions";
+import { IssueActions } from "@/components/forms/IssueActions";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/PageHeader";
 import type { MaterialRequestView } from "@/models/inventory";
 import { formatDate, formatNumber } from "@/utils/format";
 
-/** `approve`: super admin decides. `issue`: warehouse moves stock to the project. `view`: read only. */
+/** `approve`: super admin decides. `issue`: warehouse issues it from stock or rejects it. `view`: read only. */
 export function RequestTable({
   requests,
   mode = "view",
@@ -50,7 +50,7 @@ export function RequestTable({
                 {mode === "approve" ? (
                   <ApprovalActions requestId={request.id} />
                 ) : mode === "issue" ? (
-                  <ActionButton operation="fulfillMaterialRequest" body={{ requestId: request.id }} label="Issue from warehouse" />
+                  <IssueActions requestId={request.id} />
                 ) : (
                   (request.decisionNote ?? "-")
                 )}

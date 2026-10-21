@@ -95,6 +95,7 @@ export const operations: Record<string, Operation> = {
       return user.role === "project-admin" ? projects.filter((p) => p.id === user.projectId) : projects;
     },
   },
+  getManagerList: { method: "GET", access: ADMIN, handler: () => projectService.listManagers() },
   getAccountList: { method: "GET", access: PROJECT, projectScoped: true, handler: (i) => accountService.list(projectIdQuery.parse(i).projectId) },
   getAccountSummary: { method: "GET", access: PROJECT, projectScoped: true, handler: (i) => accountService.summary(projectIdQuery.parse(i).projectId) },
   getProjectStock: { method: "GET", access: PROJECT, projectScoped: true, handler: (i) => inventoryService.projectStock(projectIdQuery.parse(i).projectId) },
@@ -150,6 +151,8 @@ export const operations: Record<string, Operation> = {
     access: STORE,
     handler: (i) => inventoryService.fulfill(z.object({ requestId: z.string().min(1) }).parse(i).requestId),
   },
+  rejectMaterialRequest: { method: "POST", access: STORE, handler: (i) => inventoryService.rejectRequest(i) },
+  issueMaterialDirect: { method: "POST", access: STORE, handler: (i) => inventoryService.issueDirect(i) },
   recordMaterialUsage: { method: "POST", access: PROJECT, projectScoped: true, handler: (i) => inventoryService.recordUsage(i) },
   addWarehouseItem: { method: "POST", access: STORE, handler: (i) => inventoryService.addNewItemToWarehouse(i) },
   receiveWarehouseStock: { method: "POST", access: STORE, handler: (i) => inventoryService.receiveIntoWarehouse(i) },
@@ -185,6 +188,18 @@ export const operations: Record<string, Operation> = {
       await assertOwnTask(user, data.id);
       return hrService.setTaskStatus(data.id, data.status);
     },
+  },
+  createProject: { method: "POST", access: ADMIN, handler: (i) => projectService.create(i) },
+  updateProject: {
+    method: "POST",
+    access: ADMIN,
+    handler: (i) => projectService.update(z.object({ id: z.string().min(1) }).parse(i).id, i),
+  },
+  createManager: { method: "POST", access: ADMIN, handler: (i) => projectService.createManager(i) },
+  updateManager: {
+    method: "POST",
+    access: ADMIN,
+    handler: (i) => projectService.updateManager(z.object({ id: z.string().min(1) }).parse(i).id, i),
   },
   payPayroll: { method: "POST", access: ADMIN, handler: (i) => hrService.pay(i) },
   cancelTask: {

@@ -1,0 +1,23 @@
+[
+  {
+    "id": "mgr_p1",
+    "name": "Bilal Ahmed",
+    "phone": "0300-1110001",
+    "email": "bilal.ahmed@example.com",
+    "active": true
+  },
+  {
+    "id": "mgr_p2",
+    "name": "Sana Malik",
+    "phone": "0300-1110002",
+    "email": "sana.malik@example.com",
+    "active": true
+  },
+  {
+    "id": "mgr_p3",
+    "name": "Usman Tariq",
+    "phone": "0300-1110003",
+    "email": "usman.tariq@example.com",
+    "active": true
+  }
+]

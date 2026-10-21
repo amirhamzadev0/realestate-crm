@@ -8,7 +8,8 @@ const MOCK = path.join(process.cwd(), "src", "data", "mock");
 
 // table, json file, then [column, key in the JSON record]. Order matters: parents before children.
 const TABLES = [
-  ["projects", "projects.json", [["id", "id"], ["slug", "slug"], ["name", "name"], ["location", "location"], ["status", "status"], ["start_date", "startDate"], ["total_units", "totalUnits"], ["budget", "budget"], ["admin_name", "adminName"], ["image", "image"], ["sort_order", "order"]]],
+  ["managers", "managers.json", [["id", "id"], ["name", "name"], ["phone", "phone"], ["email", "email"], ["active", "active"]]],
+  ["projects", "projects.json", [["id", "id"], ["slug", "slug"], ["name", "name"], ["location", "location"], ["status", "status"], ["start_date", "startDate"], ["total_units", "totalUnits"], ["budget", "budget"], ["manager_id", "managerId"], ["admin_name", "adminName"], ["image", "image"], ["sort_order", "order"]]],
   ["materials", "materials.json", [["id", "id"], ["name", "name"], ["category", "category"], ["unit", "unit"]]],
   ["agents", "agents.json", [["id", "id"], ["name", "name"], ["phone", "phone"], ["commission_rate", "commissionRate"], ["active", "active"]]],
   ["campaigns", "campaigns.json", [["id", "id"], ["name", "name"], ["platform", "platform"], ["project_id", "projectId"], ["budget", "budget"], ["start_date", "startDate"], ["active", "active"]]],

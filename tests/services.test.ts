@@ -12,11 +12,14 @@ import { AccountService } from "@/services/account.service";
 import { ChangeRequestService } from "@/services/change-request.service";
 import { HrService } from "@/services/hr.service";
 import { InventoryService } from "@/services/inventory.service";
+import { ProjectService } from "@/services/project.service";
 import { SalesService } from "@/services/sales.service";
+import { MockManagerRepository } from "@/repositories/mock/manager.repository";
 import { addMonths } from "@/utils/date";
 import { today } from "@/utils/id";
 
 const projects = new MockProjectRepository();
+const projectService = new ProjectService(projects, new MockManagerRepository());
 const accounts = new AccountService(new MockAccountRepository(), projects);
 const inventory = new InventoryService(new MockInventoryRepository(), projects);
 const hr = new HrService(new MockHrRepository(), projects);
@@ -55,14 +58,48 @@ describe("material workflow", () => {
 
     const request = await inventory.createRequest({ projectId: "p2", materialId: "m2", quantity: 500, requestedBy: "Sana" });
     assert.equal(request.status, "pending");
-    await assert.rejects(inventory.fulfill(request.id), /approved/);
 
     const decided = await inventory.decide({ requestId: request.id, decision: "approved" });
     assert.equal(decided.status, "fulfilled");
-    await assert.rejects(inventory.fulfill(request.id), /approved/); // cannot be issued twice
+    await assert.rejects(inventory.fulfill(request.id), /open requests/); // cannot be issued twice
 
     assert.equal((await inventory.warehouseStock()).find((s) => s.materialId === "m2")!.quantity, cementBefore - 500);
     assert.equal((await inventory.projectStock("p2")).find((s) => s.materialId === "m2")!.quantity, siteBefore + 500);
+  });
+
+  it("lets the warehouse issue a request that is still pending", async () => {
+    const request = await inventory.createRequest({ projectId: "p2", materialId: "m2", quantity: 200, requestedBy: "Sana" });
+    const issued = await inventory.fulfill(request.id);
+    assert.equal(issued.status, "fulfilled");
+    assert.equal(issued.decisionNote, "Issued by the warehouse");
+    await assert.rejects(inventory.decide({ requestId: request.id, decision: "rejected" }), /already decided/);
+  });
+
+  it("lets the warehouse reject an open request without moving stock, and not a closed one", async () => {
+    const cement = async () => (await inventory.warehouseStock()).find((s) => s.materialId === "m2")!.quantity;
+    const before = await cement();
+    const request = await inventory.createRequest({ projectId: "p1", materialId: "m2", quantity: 100, requestedBy: "Bilal" });
+    const rejected = await inventory.rejectRequest({ requestId: request.id, note: "Out of budget" });
+    assert.equal(rejected.status, "rejected");
+    assert.equal(rejected.decisionNote, "Out of budget");
+    assert.equal(await cement(), before);
+    await assert.rejects(inventory.rejectRequest({ requestId: request.id }), /open requests/);
+    await assert.rejects(inventory.fulfill(request.id), /open requests/);
+    const defaultNote = await inventory.createRequest({ projectId: "p1", materialId: "m2", quantity: 1, requestedBy: "Bilal" });
+    assert.equal((await inventory.rejectRequest({ requestId: defaultNote.id })).decisionNote, "Rejected by the warehouse");
+  });
+
+  it("sends material to a project directly and records it", async () => {
+    const stock = async (scope: "warehouse" | "project") =>
+      (scope === "warehouse" ? await inventory.warehouseStock() : await inventory.projectStock("p3")).find((s) => s.materialId === "m2")?.quantity ?? 0;
+    const [wh, site] = [await stock("warehouse"), await stock("project")];
+    const record = await inventory.issueDirect({ projectId: "p3", materialId: "m2", quantity: 300, note: "Foundation work" });
+    assert.equal(record.status, "fulfilled");
+    assert.equal(await stock("warehouse"), wh - 300);
+    assert.equal(await stock("project"), site + 300);
+    assert.equal((await inventory.listRequests({ projectId: "p3" })).some((r) => r.id === record.id), true);
+    await assert.rejects(inventory.issueDirect({ projectId: "p3", materialId: "m2", quantity: 9_000_000 }), /Not enough stock/);
+    await assert.rejects(inventory.issueDirect({ projectId: "nope", materialId: "m2", quantity: 1 }), /Project not found/);
   });
 
   it("cannot decide twice or issue more than the warehouse holds", async () => {
@@ -242,5 +279,57 @@ describe("approval adds stock to the project inventory", () => {
     const before = (await inventory.projectStock("p1")).find((s) => s.materialId === "m2")!.quantity;
     await inventory.decide({ requestId: rejected.id, decision: "rejected" });
     assert.equal((await inventory.projectStock("p1")).find((s) => s.materialId === "m2")!.quantity, before);
+  });
+});
+
+describe("projects and managers", () => {
+  const details = { name: "Lake View", location: "Lahore", status: "planning", startDate: "2026-11-01", totalUnits: 40, budget: 90_000_000 };
+
+  it("creates a project with a new manager assigned", async () => {
+    const manager = await projectService.createManager({ name: "Kashif Raza", phone: "0300-5550000" });
+    const project = await projectService.create({ ...details, managerId: manager.id });
+    assert.equal(project.slug, "lake-view");
+    assert.equal(project.adminName, "Kashif Raza");
+    assert.equal(project.order, (await projectService.list()).length);
+    assert.equal((await projectService.listManagers()).find((m) => m.id === manager.id)?.projectName, "Lake View");
+  });
+
+  it("makes unique slugs and allows a project without a manager", async () => {
+    const first = await projectService.create(details);
+    const second = await projectService.create(details);
+    assert.equal(first.adminName, "Unassigned");
+    assert.notEqual(first.slug, second.slug);
+  });
+
+  it("edits project details but keeps the URL slug", async () => {
+    const updated = await projectService.update("p1", { ...(await projects.findById("p1")), name: "Green Valley Phase 2", budget: 500_000_000, managerId: "mgr_p1" });
+    assert.equal(updated.name, "Green Valley Phase 2");
+    assert.equal(updated.slug, "green-valley");
+    assert.equal(updated.budget, 500_000_000);
+  });
+
+  it("replaces the manager of a project, and one manager cannot run two projects", async () => {
+    const replacement = await projectService.createManager({ name: "Replacement" });
+    const moved = await projectService.update("p1", { ...(await projects.findById("p1")), managerId: replacement.id });
+    assert.equal(moved.adminName, "Replacement");
+    await assert.rejects(
+      projectService.update("p2", { ...(await projects.findById("p2")), managerId: replacement.id }),
+      /already manages/,
+    );
+    // the old manager is free again
+    const freed = (await projectService.listManagers()).find((m) => m.id === "mgr_p1");
+    assert.equal(freed?.projectId, null);
+  });
+
+  it("renames a manager everywhere and blocks deactivating one who runs a project", async () => {
+    await projectService.updateManager("mgr_p2", { name: "Sana M. Malik", phone: "", email: "", active: "true" });
+    assert.equal((await projects.findById("p2"))?.adminName, "Sana M. Malik");
+    await assert.rejects(projectService.updateManager("mgr_p2", { name: "Sana M. Malik", active: "false" }), /Assign another manager/);
+    await assert.rejects(projectService.update("p3", { ...(await projects.findById("p3")), managerId: "missing" }), /Manager not found/);
+  });
+
+  it("rejects invalid project input", async () => {
+    await assert.rejects(projectService.create({ ...details, name: "" }), ZodError);
+    await assert.rejects(projectService.create({ ...details, budget: -1 }), ZodError);
   });
 });

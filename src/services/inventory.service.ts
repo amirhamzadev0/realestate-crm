@@ -18,6 +18,13 @@ export const decisionSchema = z.object({
   note: z.string().trim().max(500).default(""),
 });
 
+export const directIssueSchema = z.object({
+  projectId: z.string().min(1),
+  materialId: z.string().min(1),
+  quantity: z.number().positive().max(10_000_000),
+  note: z.string().trim().max(500).default(""),
+});
+
 export const usageSchema = z.object({
   projectId: z.string().min(1),
   materialId: z.string().min(1),
@@ -109,27 +116,76 @@ export class InventoryService {
     return source && source.quantity >= request.quantity ? this.fulfill(request.id) : decided;
   }
 
-  /** Warehouse moves stock of an approved request to the project. */
-  async fulfill(requestId: string): Promise<MaterialRequest> {
-    const request = await this.repo.findRequest(requestId);
-    if (!request) throw notFound("Request");
-    if (request.status !== "approved") throw new AppError("Only approved requests can be issued", 409);
-
-    const source = await this.repo.findStock("warehouse", null, request.materialId);
-    if (!source || source.quantity < request.quantity) throw new AppError("Not enough stock in the warehouse", 409);
-    const target = (await this.repo.findStock("project", request.projectId, request.materialId)) ?? {
+  /** Moves stock from the warehouse to a project. Fails, changing nothing, when the warehouse holds less. */
+  private async transfer(projectId: string, materialId: string, quantity: number): Promise<void> {
+    const source = await this.repo.findStock("warehouse", null, materialId);
+    if (!source || source.quantity < quantity) throw new AppError("Not enough stock in the warehouse", 409);
+    const target = (await this.repo.findStock("project", projectId, materialId)) ?? {
       id: newId("s"),
       scope: "project" as const,
-      projectId: request.projectId,
-      materialId: request.materialId,
+      projectId,
+      materialId,
       quantity: 0,
       used: 0,
       minLevel: 0,
     };
+    await this.repo.saveStock({ ...source, quantity: source.quantity - quantity });
+    await this.repo.saveStock({ ...target, quantity: target.quantity + quantity });
+  }
 
-    await this.repo.saveStock({ ...source, quantity: source.quantity - request.quantity });
-    await this.repo.saveStock({ ...target, quantity: target.quantity + request.quantity });
-    return this.repo.saveRequest({ ...request, status: "fulfilled" });
+  /**
+   * Warehouse issues a request to the project. A request still waiting for the Super Admin can be issued
+   * directly too: issuing is then the approval.
+   */
+  async fulfill(requestId: string): Promise<MaterialRequest> {
+    const request = await this.repo.findRequest(requestId);
+    if (!request) throw notFound("Request");
+    if (request.status !== "approved" && request.status !== "pending") {
+      throw new AppError("Only open requests can be issued", 409);
+    }
+    await this.transfer(request.projectId, request.materialId, request.quantity);
+    return this.repo.saveRequest({
+      ...request,
+      status: "fulfilled",
+      decidedAt: request.decidedAt ?? today(),
+      ...(request.status === "pending" ? { decisionNote: "Issued by the warehouse" } : {}),
+    });
+  }
+
+  /** Warehouse turns down an open request. The project is told through the note, and no stock moves. */
+  async rejectRequest(input: unknown): Promise<MaterialRequest> {
+    const data = z.object({ requestId: z.string().min(1), note: z.string().trim().max(500).default("") }).parse(input);
+    const request = await this.repo.findRequest(data.requestId);
+    if (!request) throw notFound("Request");
+    if (request.status !== "approved" && request.status !== "pending") {
+      throw new AppError("Only open requests can be rejected", 409);
+    }
+    return this.repo.saveRequest({
+      ...request,
+      status: "rejected",
+      decisionNote: data.note || "Rejected by the warehouse",
+      decidedAt: today(),
+    });
+  }
+
+  /** Warehouse sends material to a project without a request. It is recorded as an issued request so it shows in the history. */
+  async issueDirect(input: unknown): Promise<MaterialRequest> {
+    const data = directIssueSchema.parse(input);
+    if (!(await this.projects.findById(data.projectId))) throw notFound("Project");
+    if (!(await this.repo.listMaterials()).some((m) => m.id === data.materialId)) throw notFound("Material");
+    await this.transfer(data.projectId, data.materialId, data.quantity);
+    return this.repo.saveRequest({
+      id: newId("r"),
+      projectId: data.projectId,
+      materialId: data.materialId,
+      quantity: data.quantity,
+      note: data.note,
+      requestedBy: "Warehouse (sent directly)",
+      createdAt: today(),
+      status: "fulfilled",
+      decisionNote: "Issued by the warehouse without a request",
+      decidedAt: today(),
+    });
   }
 
   /** Material consumed on site. */

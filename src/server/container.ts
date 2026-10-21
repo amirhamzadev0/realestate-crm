@@ -4,6 +4,7 @@ import { MemorySessionRepository, MemoryUserRepository } from "@/repositories/au
 import { MysqlSessionRepository, MysqlUserRepository } from "@/repositories/auth/mysql.repository";
 import { MockChangeRequestRepository } from "@/repositories/mock/change-request.repository";
 import { MockAccountRepository } from "@/repositories/mock/account.repository";
+import { MockManagerRepository } from "@/repositories/mock/manager.repository";
 import { MockHrRepository } from "@/repositories/mock/hr.repository";
 import { MockInventoryRepository } from "@/repositories/mock/inventory.repository";
 import { MockProjectRepository } from "@/repositories/mock/project.repository";
@@ -13,6 +14,7 @@ import { MysqlAccountRepository } from "@/repositories/mysql/account.repository"
 import { MysqlChangeRequestRepository } from "@/repositories/mysql/change-request.repository";
 import { MysqlHrRepository } from "@/repositories/mysql/hr.repository";
 import { MysqlInventoryRepository } from "@/repositories/mysql/inventory.repository";
+import { MysqlManagerRepository } from "@/repositories/mysql/manager.repository";
 import { MysqlProjectRepository } from "@/repositories/mysql/project.repository";
 import { MysqlSalesRepository } from "@/repositories/mysql/sales.repository";
 import { loadBootstrapUsers } from "@/server/auth/bootstrap-users";
@@ -32,7 +34,10 @@ const siteRepository = new MockSiteRepository();
 const projectRepository = useMysql ? new MysqlProjectRepository() : new MockProjectRepository();
 
 export const siteInfo = () => siteRepository.getInfo();
-export const projectService = new ProjectService(projectRepository);
+export const projectService = new ProjectService(
+  projectRepository,
+  useMysql ? new MysqlManagerRepository() : new MockManagerRepository(),
+);
 export const accountService = new AccountService(
   useMysql ? new MysqlAccountRepository() : new MockAccountRepository(),
   projectRepository,

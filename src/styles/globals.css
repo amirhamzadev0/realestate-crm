@@ -232,6 +232,16 @@ img {
   gap: 8px;
 }
 
+.project-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+.project-slot > .project-card {
+  align-self: stretch;
+}
+
 /* ---------- ui primitives ---------- */
 .page-header {
   display: flex;

@@ -4,7 +4,8 @@ import { connect } from "../lib/db.mjs";
 const EXPECTED = {
   users: ["id", "email", "name", "password_hash", "role", "project_id", "enabled"],
   sessions: ["token_hash", "user_id", "expires_at"],
-  projects: ["id", "slug", "name", "location", "status", "start_date", "total_units", "budget", "admin_name", "image", "sort_order"],
+  projects: ["id", "slug", "name", "location", "status", "start_date", "total_units", "budget", "manager_id", "admin_name", "image", "sort_order"],
+  managers: ["id", "name", "phone", "email", "active"],
   account_entries: ["id", "project_id", "entry_date", "type", "amount", "description", "party"],
   materials: ["id", "name", "category", "unit"],
   stock_items: ["id", "scope", "project_id", "project_key", "material_id", "quantity", "used", "min_level"],

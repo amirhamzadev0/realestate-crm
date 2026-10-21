@@ -5,6 +5,7 @@ import attendance from "@/data/mock/attendance.json";
 import changeRequests from "@/data/mock/change-requests.json";
 import campaigns from "@/data/mock/campaigns.json";
 import leads from "@/data/mock/leads.json";
+import managers from "@/data/mock/managers.json";
 import materialRequests from "@/data/mock/material-requests.json";
 import materials from "@/data/mock/materials.json";
 import payments from "@/data/mock/payments.json";
@@ -15,6 +16,7 @@ import stock from "@/data/mock/stock.json";
 import workers from "@/data/mock/workers.json";
 import type { AccountEntry } from "@/models/accounts";
 import type { ChangeRequest } from "@/models/changes";
+import type { Manager } from "@/models/manager";
 import type { Material, MaterialRequest, StockItem } from "@/models/inventory";
 import type { AttendanceRecord, PayrollPayment, Worker, WorkAssignment } from "@/models/hr";
 import type { Project } from "@/models/project";
@@ -24,6 +26,7 @@ import type { PortalInfo } from "@/models/site";
 export interface MockStore {
   site: { name: string; tagline: string; portals: PortalInfo[] };
   projects: Project[];
+  managers: Manager[];
   accounts: AccountEntry[];
   materials: Material[];
   stock: StockItem[];
@@ -52,6 +55,7 @@ export function getStore(): MockStore {
   g[KEY] ??= structuredClone({
     site,
     projects,
+    managers,
     accounts,
     materials,
     stock,

@@ -10,7 +10,8 @@
     "budget": 450000000,
     "adminName": "Bilal Ahmed",
     "image": "/assets/green-valley.jpg",
-    "order": 1
+    "order": 1,
+    "managerId": "mgr_p1"
   },
   {
     "id": "p2",
@@ -23,7 +24,8 @@
     "budget": 620000000,
     "adminName": "Sana Malik",
     "image": "/assets/skyline-heights.jpg",
-    "order": 2
+    "order": 2,
+    "managerId": "mgr_p2"
   },
   {
     "id": "p3",
@@ -36,6 +38,7 @@
     "budget": 300000000,
     "adminName": "Usman Tariq",
     "image": "/assets/royal-gardens.jpg",
-    "order": 3
+    "order": 3,
+    "managerId": "mgr_p3"
   }
 ]

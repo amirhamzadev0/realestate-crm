@@ -54,6 +54,12 @@ export const getApprovalsPage = cache(async () => {
   };
 });
 
+/** Projects with their figures, plus every manager and which project they run. */
+export const getProjectsManagement = cache(async () => {
+  const [rows, managers] = await Promise.all([getProjectsOverview(), projectService.listManagers()]);
+  return { rows, managers };
+});
+
 export const getProjectsOverview = cache(async () => {
   const projects = await projectService.list();
   return Promise.all(
