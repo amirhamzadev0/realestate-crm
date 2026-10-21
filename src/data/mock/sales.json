@@ -4,26 +4,41 @@
     "projectId": "p1",
     "agentId": "ag1",
     "leadId": "l1",
-    "unit": "Flat A-304",
+    "unit": "10-04",
     "price": 18500000,
-    "date": "2026-09-28"
+    "date": "2026-09-28",
+    "floor": "10",
+    "rate": 12500,
+    "area": 1480,
+    "category": "general",
+    "listPrice": 18500000
   },
   {
     "id": "sl2",
     "projectId": "p2",
     "agentId": "ag2",
     "leadId": "l3",
-    "unit": "Apt 7B",
+    "unit": "7-02",
     "price": 24000000,
-    "date": "2026-10-05"
+    "date": "2026-10-05",
+    "floor": "7",
+    "rate": 20000,
+    "area": 1200,
+    "category": "general",
+    "listPrice": 24000000
   },
   {
     "id": "sl3",
     "projectId": "p1",
     "agentId": "ag3",
     "leadId": null,
-    "unit": "Flat B-101",
+    "unit": "10-05",
     "price": 17200000,
-    "date": "2026-10-09"
+    "date": "2026-10-09",
+    "floor": "10",
+    "rate": 12500,
+    "area": 1376,
+    "category": "general",
+    "listPrice": 17200000
   }
 ]

@@ -1,3 +1,6 @@
+import type { PlotCategory } from "@/models/project";
+import type { DiscountMode } from "@/utils/pricing";
+
 export type LeadSource = "facebook" | "instagram" | "walk-in" | "referral" | "website";
 export type LeadStatus = "new" | "contacted" | "site-visit" | "negotiation" | "won" | "lost";
 
@@ -34,10 +37,22 @@ export interface Lead {
 export interface Sale {
   id: string;
   projectId: string;
-  agentId: string;
+  agentId: string | null; // null for a direct sale made by the Super Admin
   leadId: string | null;
+  buyer?: string; // buyer details are required for direct sales
+  buyerPhone?: string;
+  buyerCnic?: string;
+  buyerEmail?: string;
+  category: PlotCategory;
   unit: string; // plot / flat number
-  price: number;
+  floor?: string; // high-rise only
+  area: number; // sq ft (high-rise) or marla (land plotting)
+  rate: number; // the project's list rate when the sale was made
+  listPrice: number; // area x rate
+  discountMode?: Exclude<DiscountMode, "none">; // set when the Super Admin gave a discount
+  discountValue?: number; // the amount, the discounted rate or the percentage, as entered
+  discountAmount?: number; // listPrice - price
+  price: number; // what the buyer pays; this is what the project is credited
   date: string;
 }
 

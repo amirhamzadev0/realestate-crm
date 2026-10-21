@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
+import { saleUnit } from "@/models/project";
 import { changeRequestService, projectService, salesService } from "@/server/container";
 
 export const getSalesDashboard = cache(async () => {
@@ -58,17 +59,19 @@ export const getSalesReportPage = cache(async () => {
   ]);
   const agentName = new Map(agents.map((a) => [a.id, a]));
   const projectName = new Map(projects.map((p) => [p.id, p.name]));
+  const projectType = new Map(projects.map((p) => [p.id, p.type]));
   return {
     report,
-    projects,
+    projects: await salesService.saleProjects(projects),
     agents: agents.filter((a) => a.active),
     sales: [...sales]
       .sort((a, b) => b.date.localeCompare(a.date))
       .map((sale) => ({
         ...sale,
-        agentName: agentName.get(sale.agentId)?.name ?? "Unknown",
+        agentName: sale.agentId ? (agentName.get(sale.agentId)?.name ?? "Unknown") : "Direct sale",
         projectName: projectName.get(sale.projectId) ?? "Unknown",
-        commission: Math.round((sale.price * (agentName.get(sale.agentId)?.commissionRate ?? 0)) / 100),
+        areaUnit: saleUnit[projectType.get(sale.projectId) ?? "high-rise"].area,
+        commission: Math.round((sale.price * ((sale.agentId && agentName.get(sale.agentId)?.commissionRate) || 0)) / 100),
       })),
   };
 });

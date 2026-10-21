@@ -228,5 +228,6 @@ export const operations: Record<string, Operation> = {
       return salesService.setLeadStatus(data.id, data.status);
     },
   },
+  recordDirectSale: { method: "POST", access: ADMIN, handler: (i) => salesService.recordDirectSale(i) },
   recordSale: { method: "POST", access: SALES, handler: (i) => salesService.recordSale(i) },
 };

@@ -54,8 +54,8 @@ export default async function SuperAdminPage() {
 
       <h2 className="section-title">Projects</h2>
       <div className="grid grid--3">
-        {data.rows.map(({ project, accounts, hr }) => (
-          <ProjectCard key={project.id} project={project} accounts={accounts} hr={hr} href={`/projects/${project.slug}`} />
+        {data.rows.map(({ project, accounts, hr, unitsSold, soldByCategory }) => (
+          <ProjectCard key={project.id} project={project} accounts={accounts} hr={hr} unitsSold={unitsSold} soldByCategory={soldByCategory} href={`/projects/${project.slug}`} />
         ))}
       </div>
 

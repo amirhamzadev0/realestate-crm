@@ -34,23 +34,20 @@ const siteRepository = new MockSiteRepository();
 const projectRepository = useMysql ? new MysqlProjectRepository() : new MockProjectRepository();
 
 export const siteInfo = () => siteRepository.getInfo();
+const accountRepository = useMysql ? new MysqlAccountRepository() : new MockAccountRepository();
+const salesRepository = useMysql ? new MysqlSalesRepository() : new MockSalesRepository();
 export const projectService = new ProjectService(
   projectRepository,
   useMysql ? new MysqlManagerRepository() : new MockManagerRepository(),
+  salesRepository,
 );
-export const accountService = new AccountService(
-  useMysql ? new MysqlAccountRepository() : new MockAccountRepository(),
-  projectRepository,
-);
+export const accountService = new AccountService(accountRepository, projectRepository);
 export const inventoryService = new InventoryService(
   useMysql ? new MysqlInventoryRepository() : new MockInventoryRepository(),
   projectRepository,
 );
 export const hrService = new HrService(useMysql ? new MysqlHrRepository() : new MockHrRepository(), projectRepository);
-export const salesService = new SalesService(
-  useMysql ? new MysqlSalesRepository() : new MockSalesRepository(),
-  projectRepository,
-);
+export const salesService = new SalesService(salesRepository, projectRepository, accountRepository);
 export const changeRequestService = new ChangeRequestService(
   useMysql ? new MysqlChangeRequestRepository() : new MockChangeRequestRepository(),
   projectRepository,

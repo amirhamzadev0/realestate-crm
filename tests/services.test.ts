@@ -19,11 +19,11 @@ import { addMonths } from "@/utils/date";
 import { today } from "@/utils/id";
 
 const projects = new MockProjectRepository();
-const projectService = new ProjectService(projects, new MockManagerRepository());
+const projectService = new ProjectService(projects, new MockManagerRepository(), new MockSalesRepository());
 const accounts = new AccountService(new MockAccountRepository(), projects);
 const inventory = new InventoryService(new MockInventoryRepository(), projects);
 const hr = new HrService(new MockHrRepository(), projects);
-const sales = new SalesService(new MockSalesRepository(), projects);
+const sales = new SalesService(new MockSalesRepository(), projects, new MockAccountRepository());
 
 beforeEach(() => {
   // fresh seed for every test
@@ -197,9 +197,115 @@ describe("sales", () => {
   });
 
   it("recording a sale marks the lead as won", async () => {
-    await sales.recordSale({ projectId: "p1", agentId: "ag1", leadId: "l2", unit: "Flat C-1", price: 10_000_000 });
+    await sales.recordSale({ category: "general", projectId: "p1", agentId: "ag1", leadId: "l2", unit: "12-01" });
     const lead = (await sales.listLeads()).find((l) => l.id === "l2")!;
     assert.equal(lead.status, "won");
+  });
+
+  it("sells a listed high-rise unit at the size and floor defined for it", async () => {
+    // p1 unit 11-01 is a general unit on floor 11 of 1,480 sq ft; the general rate is 12,500 per sq ft
+    const sale = await sales.recordSale({ category: "general", projectId: "p1", agentId: "ag1", unit: "11-01" });
+    assert.equal(sale.floor, "11");
+    assert.equal(sale.area, 1480);
+    assert.equal(sale.price, 1480 * 12_500);
+    assert.equal(sale.listPrice, sale.price);
+    // size sent by the browser is ignored; the floor, if sent, must match
+    const second = await sales.recordSale({ category: "general", projectId: "p1", agentId: "ag1", unit: "11-02", area: 1, floor: "11", price: 1 });
+    assert.equal(second.area, 1480);
+    await assert.rejects(sales.recordSale({ category: "general", projectId: "p1", agentId: "ag1", unit: "11-03", floor: "5" }), /is on floor 11/);
+  });
+
+  it("only sells units that exist, in their own plot type, once", async () => {
+    await assert.rejects(sales.recordSale({ category: "general", projectId: "p1", agentId: "ag1", unit: "Flat X" }), /does not exist/);
+    await assert.rejects(sales.recordSale({ category: "commercial", projectId: "p1", agentId: "ag1", unit: "11-04" }), /is a general unit, not commercial/);
+    await sales.recordSale({ category: "general", projectId: "p1", agentId: "ag1", unit: "11-05" });
+    await assert.rejects(sales.recordSale({ category: "general", projectId: "p1", agentId: "ag2", unit: "11-05" }), /already sold/);
+  });
+
+  it("prices a land plot per marla and does not need a floor", async () => {
+    const sale = await sales.recordSale({ category: "general", projectId: "p3", agentId: "ag1", unit: "Plot 21", area: 5 });
+    assert.equal(sale.price, 5 * 2_500_000);
+    assert.equal(sale.floor, undefined);
+    await assert.rejects(sales.recordSale({ category: "general", projectId: "p3", agentId: "ag1", unit: "Plot 23" }), /Plot size is required/);
+  });
+
+  it("ignores a price sent by the browser and refuses a plot that is already sold", async () => {
+    const sale = await sales.recordSale({ category: "general", projectId: "p3", agentId: "ag1", unit: "Plot 22", area: 10, price: 1 });
+    assert.equal(sale.price, 25_000_000);
+    await assert.rejects(sales.recordSale({ category: "general", projectId: "p3", agentId: "ag2", unit: "plot 22", area: 10 }), /already sold/);
+  });
+
+  it("a direct sale has no agent, takes a unit off the project and credits the project accounts", async () => {
+    const before = await accounts.summary("p3");
+    const soldBefore = (await sales.unitsSold()).get("p3") ?? 0;
+    const sale = await sales.recordDirectSale({ category: "general", projectId: "p3", unit: "Plot 40", area: 4, buyer: "Mr Asif", buyerPhone: "0300-1234567", buyerCnic: "35202-1234567-1", buyerEmail: "asif@example.com" });
+    assert.equal(sale.agentId, null);
+    assert.equal(sale.leadId, null);
+    assert.equal(sale.buyer, "Mr Asif");
+    assert.equal(sale.price, 4 * 2_500_000);
+
+    assert.equal((await sales.unitsSold()).get("p3"), soldBefore + 1);
+    const after = await accounts.summary("p3");
+    assert.equal(after.sales, before.sales + sale.price);
+    assert.equal(after.balance, before.balance + sale.price);
+    const entry = (await accounts.list("p3")).find((e) => e.amount === sale.price && e.type === "sale");
+    assert.match(entry!.description, /plot Plot 40/);
+    assert.equal(entry!.party, "Mr Asif");
+  });
+
+  it("an agent sale also credits the project, and commission ignores direct sales", async () => {
+    const before = (await accounts.summary("p1")).sales;
+    const sale = await sales.recordSale({ category: "residential", projectId: "p1", agentId: "ag1", unit: "3-01" });
+    assert.equal((await accounts.summary("p1")).sales, before + sale.price);
+    await sales.recordDirectSale({ category: "residential", projectId: "p1", unit: "3-02", buyer: "Mr Asif", buyerPhone: "0300-1234567", buyerCnic: "35202-1234567-1", buyerEmail: "asif@example.com" });
+    const report = await sales.report();
+    assert.equal(report.totalSales, report.agents.reduce((n, a) => n + a.sales, 0) + 1);
+  });
+
+  it("gives a discount as an amount, a lower rate or a percentage, and credits what the buyer pays", async () => {
+    const sell = (unit: string, extra: object) =>
+      sales.recordDirectSale({ category: "general", projectId: "p3", unit, area: 10, buyer: "Mr Asif", buyerPhone: "0300-1234567", buyerCnic: "35202-1234567-1", buyerEmail: "asif@example.com", ...extra });
+    // 10 marla x 2,500,000 = 25,000,000
+    const plain = await sell("D-0", {});
+    assert.equal(plain.listPrice, 25_000_000);
+    assert.equal(plain.discountAmount, undefined);
+
+    const amount = await sell("D-1", { discountMode: "amount", discountValue: 10_000 });
+    assert.equal(amount.price, 24_990_000);
+    assert.equal(amount.listPrice, 25_000_000);
+    assert.equal(amount.discountAmount, 10_000);
+
+    const rate = await sell("D-2", { discountMode: "rate", discountValue: 2_400_000 });
+    assert.equal(rate.price, 24_000_000);
+    assert.equal(rate.discountAmount, 1_000_000);
+
+    const percent = await sell("D-3", { discountMode: "percent", discountValue: 10 });
+    assert.equal(percent.price, 22_500_000);
+    assert.equal(percent.discountMode, "percent");
+    assert.equal(percent.discountValue, 10);
+
+    // the project is credited with what was paid, not the list price
+    const credited = (await accounts.list("p3")).filter((e) => e.type === "sale" && /discount/.test(e.description)).map((e) => e.amount);
+    assert.deepEqual(credited.sort(), [22_500_000, 24_000_000, 24_990_000]);
+
+    await assert.rejects(sell("D-4", { discountMode: "amount", discountValue: 25_000_000 }), /less than the total/);
+    await assert.rejects(sell("D-5", { discountMode: "rate", discountValue: 2_500_000 }), /lower than the list rate/);
+    await assert.rejects(sell("D-6", { discountMode: "percent", discountValue: 100 }), /below 100/);
+    await assert.rejects(sell("D-7", { discountMode: "percent" }), /Enter the discount/);
+  });
+
+  it("an agent sale cannot carry a discount", async () => {
+    const sale = await sales.recordSale({ category: "general", projectId: "p3", agentId: "ag1", unit: "Plot 70", area: 10, discountMode: "percent", discountValue: 50 });
+    assert.equal(sale.price, 25_000_000);
+    assert.equal(sale.discountMode, undefined);
+  });
+
+  it("stops selling when every unit is sold", async () => {
+    const project = (await projects.findById("p3"))!;
+    await projectService.update("p3", { ...project, totalUnits: undefined, rates: [{ category: "general", rate: 2_500_000, units: 1 }] });
+    await sales.recordDirectSale({ category: "general", projectId: "p3", unit: "Only plot", area: 1, buyer: "Mr Asif", buyerPhone: "0300-1234567", buyerCnic: "35202-1234567-1", buyerEmail: "asif@example.com" });
+    await assert.rejects(sales.recordDirectSale({ category: "general", projectId: "p3", unit: "Another plot", area: 1, buyer: "Mr Asif", buyerPhone: "0300-1234567", buyerCnic: "35202-1234567-1", buyerEmail: "asif@example.com" }), /are sold|no units left/);
+    await assert.rejects(sales.recordSale({ category: "general", projectId: "p3", agentId: "ag1", unit: "Another plot", area: 1 }), /are sold|no units left/);
   });
 
   it("rejects invalid leads", async () => {
@@ -283,7 +389,7 @@ describe("approval adds stock to the project inventory", () => {
 });
 
 describe("projects and managers", () => {
-  const details = { name: "Lake View", location: "Lahore", status: "planning", startDate: "2026-11-01", totalUnits: 40, budget: 90_000_000 };
+  const details = { name: "Lake View", location: "Lahore", type: "land-plotting", rates: [{ category: "general", rate: 3_000_000, units: 40 }], status: "planning", startDate: "2026-11-01", totalUnits: 40, budget: 90_000_000 };
 
   it("creates a project with a new manager assigned", async () => {
     const manager = await projectService.createManager({ name: "Kashif Raza", phone: "0300-5550000" });
@@ -331,5 +437,143 @@ describe("projects and managers", () => {
   it("rejects invalid project input", async () => {
     await assert.rejects(projectService.create({ ...details, name: "" }), ZodError);
     await assert.rejects(projectService.create({ ...details, budget: -1 }), ZodError);
+  });
+
+  it("fixes the project type but lets the prices change, and new sales use the new price", async () => {
+    const project = (await projects.findById("p3"))!;
+    const updated = await projectService.update("p3", { ...project, type: "high-rise", totalUnits: undefined, rates: [{ category: "general", rate: 3_000_000, units: 200 }] });
+    assert.equal(updated.type, "land-plotting");
+    assert.deepEqual(updated.rates, [{ category: "general", rate: 3_000_000, units: 200 }]);
+    const sale = await sales.recordSale({ category: "general", projectId: "p3", agentId: "ag1", unit: "Plot 1", area: 2 });
+    assert.equal(sale.price, 6_000_000);
+    await assert.rejects(projectService.create({ ...details, rates: [] }), ZodError);
+  });
+
+  it("lists every unit of a high-rise and counts them per plot type", async () => {
+    const rates = [{ category: "commercial", rate: 30_000 }, { category: "residential", rate: 18_000 }];
+    const units = [
+      { category: "commercial", floor: "G", unit: "G-01", area: 500 },
+      { category: "commercial", floor: "1", unit: "1-01", area: 650 },
+      { category: "residential", floor: "2", unit: "2-01", area: 1100 },
+    ];
+    const project = await projectService.create({ ...details, type: "high-rise", rates, units, totalUnits: undefined });
+    assert.equal(project.totalUnits, 3); // counted from the list
+    assert.deepEqual(project.rates.map((r) => [r.category, r.units]), [["commercial", 2], ["residential", 1]]);
+    assert.equal(project.units[1].area, 650); // every unit keeps its own size
+
+    await assert.rejects(projectService.create({ ...details, type: "high-rise", rates, units, totalUnits: 9 }), /must equal the number of units listed \(3\)/);
+    await assert.rejects(projectService.create({ ...details, type: "high-rise", rates, units: [] }), /Add the units/);
+    await assert.rejects(projectService.create({ ...details, type: "high-rise", rates, units: [units[0], { ...units[1], unit: "g-01" }] }), /listed twice/);
+    await assert.rejects(
+      projectService.create({ ...details, type: "high-rise", rates: [rates[0]], units }),
+      /Set a price for the residential units/,
+    );
+    await assert.rejects(projectService.create({ ...details, rates: [{ category: "general", rate: 1 }, { category: "general", rate: 2 }] }), /only one price/);
+    // a plot type with a price but no units is dropped from a high-rise
+    const trimmed = await projectService.create({ ...details, type: "high-rise", rates: [...rates, { category: "general", rate: 5 }], units: [units[0]], totalUnits: undefined });
+    assert.deepEqual(trimmed.rates.map((r) => r.category), ["commercial"]);
+    // land plotting ignores a unit list
+    const landRates = [{ category: "commercial", rate: 30_000, units: 15 }, { category: "residential", rate: 18_000, units: 25 }];
+    const land = await projectService.create({ ...details, rates: landRates, units, totalUnits: 40 });
+    assert.deepEqual(land.units, []);
+  });
+
+  it("sells floor by floor and unit by unit, and protects sold units when editing", async () => {
+    const project = await projectService.create({
+      ...details,
+      type: "high-rise",
+      rates: [{ category: "commercial", rate: 30_000 }, { category: "residential", rate: 18_000 }],
+      units: [
+        { category: "commercial", floor: "G", unit: "S-1", area: 400 },
+        { category: "commercial", floor: "G", unit: "S-2", area: 450 },
+        { category: "residential", floor: "1", unit: "A-1", area: 1000 },
+      ],
+      totalUnits: undefined,
+    });
+    const buyer = { buyerPhone: "0300-1234567", buyerCnic: "3520212345671", buyerEmail: "Buyer@Example.com", buyer: "Buyer One" };
+    const sell = (extra: object) => sales.recordDirectSale({ projectId: project.id, ...buyer, ...extra });
+
+    const shop = await sell({ category: "commercial", unit: "s-1" });
+    assert.equal(shop.unit, "S-1"); // stored as listed
+    assert.equal(shop.floor, "G");
+    assert.equal(shop.price, 400 * 30_000);
+    assert.equal(shop.buyerCnic, "35202-1234567-1"); // tidied up
+    assert.equal(shop.buyerEmail, "buyer@example.com");
+
+    const free = (await sales.availableUnits([(await projects.findById(project.id))!])).get(project.id)!;
+    assert.deepEqual(free.map((u) => u.unit), ["S-2", "A-1"]);
+
+    // sold units cannot be removed or moved to another plot type
+    const base = { ...(await projects.findById(project.id)), totalUnits: undefined };
+    await assert.rejects(projectService.update(project.id, { ...base, units: base.units!.filter((u) => u.unit !== "S-1") }), /S-1 is already sold/);
+    await assert.rejects(projectService.update(project.id, { ...base, units: base.units!.map((u) => (u.unit === "S-1" ? { ...u, category: "residential" } : u)) }), /S-1 is already sold/);
+    // a free unit's size can change, and units can be added
+    const edited = await projectService.update(project.id, {
+      ...base,
+      units: [...base.units!.map((u) => (u.unit === "S-2" ? { ...u, area: 475 } : u)), { category: "residential", floor: "1", unit: "A-2", area: 900 }],
+    });
+    assert.equal(edited.totalUnits, 4);
+    assert.equal(edited.units.find((u) => u.unit === "S-2")!.area, 475);
+  });
+
+  it("needs the buyer's name, phone, CNIC and email for a direct sale", async () => {
+    const full = { category: "general", projectId: "p3", unit: "Plot 90", area: 1, buyer: "A Buyer", buyerPhone: "0300-1234567", buyerCnic: "35202-1234567-1", buyerEmail: "a@example.com" };
+    for (const bad of [{ buyer: "" }, { buyerPhone: "abc" }, { buyerCnic: "1234" }, { buyerEmail: "not-an-email" }]) {
+      await assert.rejects(sales.recordDirectSale({ ...full, ...bad }), ZodError);
+    }
+    assert.equal((await sales.recordDirectSale(full)).buyerEmail, "a@example.com");
+    // an agent sale may leave the buyer details out
+    const agentSale = await sales.recordSale({ category: "general", projectId: "p3", agentId: "ag1", unit: "Plot 91", area: 1 });
+    assert.equal(agentSale.buyerCnic, undefined);
+  });
+
+  it("counts the plots of each type and makes the total their sum", async () => {
+    const rates = [
+      { category: "commercial", rate: 4_000_000, units: 40 },
+      { category: "residential", rate: 2_800_000, units: 100 },
+      { category: "general", rate: 2_500_000, units: 60 },
+    ];
+    const project = await projectService.create({ ...details, rates, totalUnits: undefined });
+    assert.equal(project.totalUnits, 200);
+    assert.deepEqual(project.rates.map((r) => r.units), [40, 100, 60]);
+
+    await assert.rejects(projectService.create({ ...details, rates, totalUnits: 150 }), /must equal the units of all plot types \(200\)/);
+    await assert.rejects(projectService.create({ ...details, rates: [{ category: "commercial", rate: 1 }] , totalUnits: 5 }), /Enter how many/);
+    await assert.rejects(
+      projectService.create({ ...details, rates: [{ category: "commercial", rate: 1, units: 5 }, { category: "general", rate: 1 }], totalUnits: 5 }),
+      /Enter how many/,
+    );
+    // a high-rise takes its counts from the unit list, not from the numbers typed per type
+    const tower = await projectService.create({
+      ...details,
+      type: "high-rise",
+      rates: [{ category: "general", rate: 1, units: 999 }],
+      units: [{ category: "general", floor: "1", unit: "1-01", area: 100 }],
+      totalUnits: undefined,
+    });
+    assert.equal(tower.totalUnits, 1);
+    assert.equal(tower.rates[0].units, 1);
+  });
+
+  it("stops selling a plot type when all its units are sold, and protects sold counts when editing", async () => {
+    const project = await projectService.create({
+      ...details,
+      rates: [{ category: "commercial", rate: 4_000_000, units: 1 }, { category: "residential", rate: 2_000_000, units: 2 }],
+      totalUnits: undefined,
+    });
+    const buyer = { buyer: "B", buyerPhone: "0300-1234567", buyerCnic: "3520212345671", buyerEmail: "b@example.com" };
+    const sell = (category: string, unit: string) => sales.recordDirectSale({ projectId: project.id, category, unit, area: 1, ...buyer });
+
+    await sell("commercial", "C-1");
+    await assert.rejects(sell("commercial", "C-2"), /All 1 commercial units .* are sold/);
+    await sell("residential", "R-1"); // other types are not affected
+
+    const base = { ...project, totalUnits: undefined };
+    await assert.rejects(
+      projectService.update(project.id, { ...base, rates: [{ category: "commercial", rate: 4_000_000, units: 1 }, { category: "residential", rate: 2_000_000, units: 1 }].slice(0, 1) }),
+      /already sold/,
+    );
+    await projectService.update(project.id, { ...base, rates: [{ category: "commercial", rate: 4_000_000, units: 5 }, { category: "residential", rate: 2_000_000, units: 2 }] });
+    await sell("commercial", "C-2");
   });
 });

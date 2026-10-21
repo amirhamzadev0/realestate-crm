@@ -1,4 +1,5 @@
 import {
+  BadgeDollarSign,
   Boxes,
   Building2,
   ChartNoAxesColumn,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 
 const icons: Record<string, LucideIcon> = {
+  BadgeDollarSign,
   Boxes,
   Building2,
   ChartNoAxesColumn,

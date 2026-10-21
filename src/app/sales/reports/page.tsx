@@ -4,7 +4,7 @@ import { SalesReportCards } from "@/components/sales/SalesReportCards";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { EmptyState, PageHeader } from "@/components/ui/PageHeader";
-import { formatDate, formatMoney } from "@/utils/format";
+import { formatDate, formatMoney, formatNumber } from "@/utils/format";
 import { getSalesReportPage } from "@/viewmodels/sales.viewmodel";
 
 export const metadata: Metadata = { title: "Sales & Commission" };
@@ -17,7 +17,7 @@ export default async function SalesReportPage() {
       <PageHeader title="Sales and commission" subtitle="Every sale with the commission owed to the agent" />
       <SalesReportCards report={report} />
       <Card title="Record a sale">
-        <SaleForm projects={projects} agents={agents} />
+        <SaleForm mode="agent" projects={projects} agents={agents} />
       </Card>
       <Card title="Sales report">
         {sales.length === 0 ? (
@@ -29,7 +29,10 @@ export default async function SalesReportPage() {
                 <tr>
                   <th>Date</th>
                   <th>Project</th>
-                  <th>Unit</th>
+                  <th>Unit / plot</th>
+                  <th>Floor</th>
+                  <th className="num">Area</th>
+                  <th className="num">Rate</th>
                   <th>Agent</th>
                   <th className="num">Price</th>
                   <th className="num">Commission</th>
@@ -41,6 +44,11 @@ export default async function SalesReportPage() {
                     <td>{formatDate(sale.date)}</td>
                     <td>{sale.projectName}</td>
                     <td>{sale.unit}</td>
+                    <td>{sale.floor ?? "-"}</td>
+                    <td className="num">
+                      {formatNumber(sale.area)} {sale.areaUnit}
+                    </td>
+                    <td className="num">{formatMoney(sale.rate)}</td>
                     <td>{sale.agentName}</td>
                     <td className="num">{formatMoney(sale.price)}</td>
                     <td className="num">

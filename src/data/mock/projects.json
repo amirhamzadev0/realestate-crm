@@ -11,7 +11,747 @@
     "adminName": "Bilal Ahmed",
     "image": "/assets/green-valley.jpg",
     "order": 1,
-    "managerId": "mgr_p1"
+    "managerId": "mgr_p1",
+    "type": "high-rise",
+    "rates": [
+      {
+        "category": "commercial",
+        "rate": 20000,
+        "units": 20
+      },
+      {
+        "category": "residential",
+        "rate": 13500,
+        "units": 70
+      },
+      {
+        "category": "general",
+        "rate": 12500,
+        "units": 30
+      }
+    ],
+    "units": [
+      {
+        "category": "commercial",
+        "floor": "1",
+        "unit": "1-01",
+        "area": 850
+      },
+      {
+        "category": "commercial",
+        "floor": "1",
+        "unit": "1-02",
+        "area": 850
+      },
+      {
+        "category": "commercial",
+        "floor": "1",
+        "unit": "1-03",
+        "area": 850
+      },
+      {
+        "category": "commercial",
+        "floor": "1",
+        "unit": "1-04",
+        "area": 850
+      },
+      {
+        "category": "commercial",
+        "floor": "1",
+        "unit": "1-05",
+        "area": 850
+      },
+      {
+        "category": "commercial",
+        "floor": "1",
+        "unit": "1-06",
+        "area": 850
+      },
+      {
+        "category": "commercial",
+        "floor": "1",
+        "unit": "1-07",
+        "area": 850
+      },
+      {
+        "category": "commercial",
+        "floor": "1",
+        "unit": "1-08",
+        "area": 850
+      },
+      {
+        "category": "commercial",
+        "floor": "1",
+        "unit": "1-09",
+        "area": 850
+      },
+      {
+        "category": "commercial",
+        "floor": "1",
+        "unit": "1-10",
+        "area": 850
+      },
+      {
+        "category": "commercial",
+        "floor": "2",
+        "unit": "2-01",
+        "area": 850
+      },
+      {
+        "category": "commercial",
+        "floor": "2",
+        "unit": "2-02",
+        "area": 850
+      },
+      {
+        "category": "commercial",
+        "floor": "2",
+        "unit": "2-03",
+        "area": 850
+      },
+      {
+        "category": "commercial",
+        "floor": "2",
+        "unit": "2-04",
+        "area": 850
+      },
+      {
+        "category": "commercial",
+        "floor": "2",
+        "unit": "2-05",
+        "area": 850
+      },
+      {
+        "category": "commercial",
+        "floor": "2",
+        "unit": "2-06",
+        "area": 850
+      },
+      {
+        "category": "commercial",
+        "floor": "2",
+        "unit": "2-07",
+        "area": 850
+      },
+      {
+        "category": "commercial",
+        "floor": "2",
+        "unit": "2-08",
+        "area": 850
+      },
+      {
+        "category": "commercial",
+        "floor": "2",
+        "unit": "2-09",
+        "area": 850
+      },
+      {
+        "category": "commercial",
+        "floor": "2",
+        "unit": "2-10",
+        "area": 850
+      },
+      {
+        "category": "residential",
+        "floor": "3",
+        "unit": "3-01",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "3",
+        "unit": "3-02",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "3",
+        "unit": "3-03",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "3",
+        "unit": "3-04",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "3",
+        "unit": "3-05",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "3",
+        "unit": "3-06",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "3",
+        "unit": "3-07",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "3",
+        "unit": "3-08",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "3",
+        "unit": "3-09",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "3",
+        "unit": "3-10",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "4",
+        "unit": "4-01",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "4",
+        "unit": "4-02",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "4",
+        "unit": "4-03",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "4",
+        "unit": "4-04",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "4",
+        "unit": "4-05",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "4",
+        "unit": "4-06",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "4",
+        "unit": "4-07",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "4",
+        "unit": "4-08",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "4",
+        "unit": "4-09",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "4",
+        "unit": "4-10",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "5",
+        "unit": "5-01",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "5",
+        "unit": "5-02",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "5",
+        "unit": "5-03",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "5",
+        "unit": "5-04",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "5",
+        "unit": "5-05",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "5",
+        "unit": "5-06",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "5",
+        "unit": "5-07",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "5",
+        "unit": "5-08",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "5",
+        "unit": "5-09",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "5",
+        "unit": "5-10",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "6",
+        "unit": "6-01",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "6",
+        "unit": "6-02",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "6",
+        "unit": "6-03",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "6",
+        "unit": "6-04",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "6",
+        "unit": "6-05",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "6",
+        "unit": "6-06",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "6",
+        "unit": "6-07",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "6",
+        "unit": "6-08",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "6",
+        "unit": "6-09",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "6",
+        "unit": "6-10",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "7",
+        "unit": "7-01",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "7",
+        "unit": "7-02",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "7",
+        "unit": "7-03",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "7",
+        "unit": "7-04",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "7",
+        "unit": "7-05",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "7",
+        "unit": "7-06",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "7",
+        "unit": "7-07",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "7",
+        "unit": "7-08",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "7",
+        "unit": "7-09",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "7",
+        "unit": "7-10",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "8",
+        "unit": "8-01",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "8",
+        "unit": "8-02",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "8",
+        "unit": "8-03",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "8",
+        "unit": "8-04",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "8",
+        "unit": "8-05",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "8",
+        "unit": "8-06",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "8",
+        "unit": "8-07",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "8",
+        "unit": "8-08",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "8",
+        "unit": "8-09",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "8",
+        "unit": "8-10",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "9",
+        "unit": "9-01",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "9",
+        "unit": "9-02",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "9",
+        "unit": "9-03",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "9",
+        "unit": "9-04",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "9",
+        "unit": "9-05",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "9",
+        "unit": "9-06",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "9",
+        "unit": "9-07",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "9",
+        "unit": "9-08",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "9",
+        "unit": "9-09",
+        "area": 1250
+      },
+      {
+        "category": "residential",
+        "floor": "9",
+        "unit": "9-10",
+        "area": 1250
+      },
+      {
+        "category": "general",
+        "floor": "10",
+        "unit": "10-01",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "10",
+        "unit": "10-02",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "10",
+        "unit": "10-03",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "10",
+        "unit": "10-04",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "10",
+        "unit": "10-05",
+        "area": 1376
+      },
+      {
+        "category": "general",
+        "floor": "10",
+        "unit": "10-06",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "10",
+        "unit": "10-07",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "10",
+        "unit": "10-08",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "10",
+        "unit": "10-09",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "10",
+        "unit": "10-10",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "11",
+        "unit": "11-01",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "11",
+        "unit": "11-02",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "11",
+        "unit": "11-03",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "11",
+        "unit": "11-04",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "11",
+        "unit": "11-05",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "11",
+        "unit": "11-06",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "11",
+        "unit": "11-07",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "11",
+        "unit": "11-08",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "11",
+        "unit": "11-09",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "11",
+        "unit": "11-10",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "12",
+        "unit": "12-01",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "12",
+        "unit": "12-02",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "12",
+        "unit": "12-03",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "12",
+        "unit": "12-04",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "12",
+        "unit": "12-05",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "12",
+        "unit": "12-06",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "12",
+        "unit": "12-07",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "12",
+        "unit": "12-08",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "12",
+        "unit": "12-09",
+        "area": 1480
+      },
+      {
+        "category": "general",
+        "floor": "12",
+        "unit": "12-10",
+        "area": 1480
+      }
+    ]
   },
   {
     "id": "p2",
@@ -25,7 +765,502 @@
     "adminName": "Sana Malik",
     "image": "/assets/skyline-heights.jpg",
     "order": 2,
-    "managerId": "mgr_p2"
+    "managerId": "mgr_p2",
+    "type": "high-rise",
+    "rates": [
+      {
+        "category": "commercial",
+        "rate": 26000,
+        "units": 30
+      },
+      {
+        "category": "general",
+        "rate": 20000,
+        "units": 50
+      }
+    ],
+    "units": [
+      {
+        "category": "commercial",
+        "floor": "1",
+        "unit": "1-01",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "1",
+        "unit": "1-02",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "1",
+        "unit": "1-03",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "1",
+        "unit": "1-04",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "1",
+        "unit": "1-05",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "1",
+        "unit": "1-06",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "1",
+        "unit": "1-07",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "1",
+        "unit": "1-08",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "2",
+        "unit": "2-01",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "2",
+        "unit": "2-02",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "2",
+        "unit": "2-03",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "2",
+        "unit": "2-04",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "2",
+        "unit": "2-05",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "2",
+        "unit": "2-06",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "2",
+        "unit": "2-07",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "2",
+        "unit": "2-08",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "3",
+        "unit": "3-01",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "3",
+        "unit": "3-02",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "3",
+        "unit": "3-03",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "3",
+        "unit": "3-04",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "3",
+        "unit": "3-05",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "3",
+        "unit": "3-06",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "3",
+        "unit": "3-07",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "3",
+        "unit": "3-08",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "4",
+        "unit": "4-01",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "4",
+        "unit": "4-02",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "4",
+        "unit": "4-03",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "4",
+        "unit": "4-04",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "4",
+        "unit": "4-05",
+        "area": 700
+      },
+      {
+        "category": "commercial",
+        "floor": "4",
+        "unit": "4-06",
+        "area": 700
+      },
+      {
+        "category": "general",
+        "floor": "4",
+        "unit": "4-07",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "4",
+        "unit": "4-08",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "5",
+        "unit": "5-01",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "5",
+        "unit": "5-02",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "5",
+        "unit": "5-03",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "5",
+        "unit": "5-04",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "5",
+        "unit": "5-05",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "5",
+        "unit": "5-06",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "5",
+        "unit": "5-07",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "5",
+        "unit": "5-08",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "6",
+        "unit": "6-01",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "6",
+        "unit": "6-02",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "6",
+        "unit": "6-03",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "6",
+        "unit": "6-04",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "6",
+        "unit": "6-05",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "6",
+        "unit": "6-06",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "6",
+        "unit": "6-07",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "6",
+        "unit": "6-08",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "7",
+        "unit": "7-01",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "7",
+        "unit": "7-02",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "7",
+        "unit": "7-03",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "7",
+        "unit": "7-04",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "7",
+        "unit": "7-05",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "7",
+        "unit": "7-06",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "7",
+        "unit": "7-07",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "7",
+        "unit": "7-08",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "8",
+        "unit": "8-01",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "8",
+        "unit": "8-02",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "8",
+        "unit": "8-03",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "8",
+        "unit": "8-04",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "8",
+        "unit": "8-05",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "8",
+        "unit": "8-06",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "8",
+        "unit": "8-07",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "8",
+        "unit": "8-08",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "9",
+        "unit": "9-01",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "9",
+        "unit": "9-02",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "9",
+        "unit": "9-03",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "9",
+        "unit": "9-04",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "9",
+        "unit": "9-05",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "9",
+        "unit": "9-06",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "9",
+        "unit": "9-07",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "9",
+        "unit": "9-08",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "10",
+        "unit": "10-01",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "10",
+        "unit": "10-02",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "10",
+        "unit": "10-03",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "10",
+        "unit": "10-04",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "10",
+        "unit": "10-05",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "10",
+        "unit": "10-06",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "10",
+        "unit": "10-07",
+        "area": 1200
+      },
+      {
+        "category": "general",
+        "floor": "10",
+        "unit": "10-08",
+        "area": 1200
+      }
+    ]
   },
   {
     "id": "p3",
@@ -39,6 +1274,25 @@
     "adminName": "Usman Tariq",
     "image": "/assets/royal-gardens.jpg",
     "order": 3,
-    "managerId": "mgr_p3"
+    "managerId": "mgr_p3",
+    "type": "land-plotting",
+    "rates": [
+      {
+        "category": "commercial",
+        "rate": 4000000,
+        "units": 40
+      },
+      {
+        "category": "residential",
+        "rate": 2800000,
+        "units": 100
+      },
+      {
+        "category": "general",
+        "rate": 2500000,
+        "units": 60
+      }
+    ],
+    "units": []
   }
 ]

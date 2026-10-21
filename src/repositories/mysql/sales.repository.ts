@@ -8,12 +8,25 @@ const AGENT_COLUMNS = "id, name, phone, commission_rate AS commissionRate, activ
 const CAMPAIGN_COLUMNS = "id, name, platform, project_id AS projectId, budget, start_date AS startDate, active";
 const LEAD_COLUMNS = `id, name, phone, project_id AS projectId, source, campaign_id AS campaignId,
   agent_id AS agentId, status, created_at AS createdAt`;
-const SALE_COLUMNS = "id, project_id AS projectId, agent_id AS agentId, lead_id AS leadId, unit, price, sale_date AS date";
+const SALE_COLUMNS =
+  "id, project_id AS projectId, agent_id AS agentId, lead_id AS leadId, unit, category, buyer, buyer_phone AS buyerPhone, buyer_cnic AS buyerCnic, buyer_email AS buyerEmail, floor, area, rate, list_price AS listPrice, discount_mode AS discountMode, discount_value AS discountValue, discount_amount AS discountAmount, price, sale_date AS date";
 
 const decodeAgent = (row: Row) => ({ ...(row as unknown as Agent), active: Boolean(row.active) });
 const decodeCampaign = (row: Row) => ({ ...(row as unknown as Campaign), active: Boolean(row.active) });
 const decodeLead = (row: Row) => row as unknown as Lead;
-const decodeSale = (row: Row) => row as unknown as Sale;
+/** A NULL floor is left out, matching the mock data where the key is simply absent. */
+function decodeSale(row: Row): Sale {
+  const { floor, buyer, buyerPhone, buyerCnic, buyerEmail, discountMode, discountValue, discountAmount, ...rest } = row as unknown as Sale;
+  return {
+    ...rest,
+    ...(floor != null ? { floor } : {}),
+    ...(buyer != null ? { buyer } : {}),
+    ...(buyerPhone != null ? { buyerPhone } : {}),
+    ...(buyerCnic != null ? { buyerCnic } : {}),
+    ...(buyerEmail != null ? { buyerEmail } : {}),
+    ...(discountMode != null ? { discountMode, discountValue, discountAmount } : {}),
+  };
+}
 
 export class MysqlSalesRepository implements SalesRepository {
   async listAgents() {
@@ -54,9 +67,12 @@ export class MysqlSalesRepository implements SalesRepository {
   }
   async saveSale(sale: Sale) {
     await run(
-      `INSERT INTO sales (id, project_id, agent_id, lead_id, unit, price, sale_date) VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE unit = VALUES(unit), price = VALUES(price), sale_date = VALUES(sale_date)`,
-      [sale.id, sale.projectId, sale.agentId, sale.leadId, sale.unit, sale.price, sale.date],
+      `INSERT INTO sales (id, project_id, agent_id, lead_id, unit, category, buyer, buyer_phone, buyer_cnic, buyer_email, floor, area, rate, list_price, discount_mode, discount_value, discount_amount, price, sale_date)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE unit = VALUES(unit), category = VALUES(category), buyer = VALUES(buyer), buyer_phone = VALUES(buyer_phone), buyer_cnic = VALUES(buyer_cnic), buyer_email = VALUES(buyer_email), floor = VALUES(floor), area = VALUES(area), rate = VALUES(rate), list_price = VALUES(list_price),
+         discount_mode = VALUES(discount_mode), discount_value = VALUES(discount_value), discount_amount = VALUES(discount_amount),
+         price = VALUES(price), sale_date = VALUES(sale_date)`,
+      [sale.id, sale.projectId, sale.agentId, sale.leadId, sale.unit, sale.category, sale.buyer ?? null, sale.buyerPhone ?? null, sale.buyerCnic ?? null, sale.buyerEmail ?? null, sale.floor ?? null, sale.area, sale.rate, sale.listPrice, sale.discountMode ?? null, sale.discountValue ?? null, sale.discountAmount ?? null, sale.price, sale.date],
     );
     return sale;
   }

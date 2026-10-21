@@ -15,9 +15,9 @@ export default async function SuperAdminProjectsPage() {
     <>
       <PageHeader title="Projects" subtitle="Create projects, edit their details and choose who manages them" />
       <div className="grid grid--3">
-        {rows.map(({ project, accounts, hr }) => (
+        {rows.map(({ project, accounts, hr, unitsSold, soldByCategory }) => (
           <div key={project.id} className="project-slot">
-            <ProjectCard project={project} accounts={accounts} hr={hr} href={`/projects/${project.slug}`} />
+            <ProjectCard project={project} accounts={accounts} hr={hr} unitsSold={unitsSold} soldByCategory={soldByCategory} href={`/projects/${project.slug}`} />
             <details className="row-edit">
               <summary className="button button--ghost button--small">Edit project / change manager</summary>
               <ProjectEditForm project={project} managers={managers} />

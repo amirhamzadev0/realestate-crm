@@ -9,7 +9,7 @@ const MOCK = path.join(process.cwd(), "src", "data", "mock");
 // table, json file, then [column, key in the JSON record]. Order matters: parents before children.
 const TABLES = [
   ["managers", "managers.json", [["id", "id"], ["name", "name"], ["phone", "phone"], ["email", "email"], ["active", "active"]]],
-  ["projects", "projects.json", [["id", "id"], ["slug", "slug"], ["name", "name"], ["location", "location"], ["status", "status"], ["start_date", "startDate"], ["total_units", "totalUnits"], ["budget", "budget"], ["manager_id", "managerId"], ["admin_name", "adminName"], ["image", "image"], ["sort_order", "order"]]],
+  ["projects", "projects.json", [["id", "id"], ["slug", "slug"], ["name", "name"], ["location", "location"], ["project_type", "type"], ["status", "status"], ["start_date", "startDate"], ["total_units", "totalUnits"], ["budget", "budget"], ["manager_id", "managerId"], ["admin_name", "adminName"], ["image", "image"], ["sort_order", "order"]]],
   ["materials", "materials.json", [["id", "id"], ["name", "name"], ["category", "category"], ["unit", "unit"]]],
   ["agents", "agents.json", [["id", "id"], ["name", "name"], ["phone", "phone"], ["commission_rate", "commissionRate"], ["active", "active"]]],
   ["campaigns", "campaigns.json", [["id", "id"], ["name", "name"], ["platform", "platform"], ["project_id", "projectId"], ["budget", "budget"], ["start_date", "startDate"], ["active", "active"]]],
@@ -19,7 +19,7 @@ const TABLES = [
   ["account_entries", "accounts.json", [["id", "id"], ["project_id", "projectId"], ["entry_date", "date"], ["type", "type"], ["amount", "amount"], ["description", "description"], ["party", "party"]]],
   ["material_requests", "material-requests.json", [["id", "id"], ["project_id", "projectId"], ["material_id", "materialId"], ["quantity", "quantity"], ["note", "note"], ["requested_by", "requestedBy"], ["created_at", "createdAt"], ["status", "status"], ["decision_note", "decisionNote"], ["decided_at", "decidedAt"]]],
   ["leads", "leads.json", [["id", "id"], ["name", "name"], ["phone", "phone"], ["project_id", "projectId"], ["source", "source"], ["campaign_id", "campaignId"], ["agent_id", "agentId"], ["status", "status"], ["created_at", "createdAt"]]],
-  ["sales", "sales.json", [["id", "id"], ["project_id", "projectId"], ["agent_id", "agentId"], ["lead_id", "leadId"], ["unit", "unit"], ["price", "price"], ["sale_date", "date"]]],
+  ["sales", "sales.json", [["id", "id"], ["project_id", "projectId"], ["agent_id", "agentId"], ["lead_id", "leadId"], ["unit", "unit"], ["category", "category"], ["buyer", "buyer"], ["buyer_phone", "buyerPhone"], ["buyer_cnic", "buyerCnic"], ["buyer_email", "buyerEmail"], ["floor", "floor"], ["area", "area"], ["rate", "rate"], ["list_price", "listPrice"], ["price", "price"], ["sale_date", "date"]]],
   ["assignments", "assignments.json", [["id", "id"], ["project_id", "projectId"], ["worker_id", "workerId"], ["task", "task"], ["status", "status"], ["assigned_at", "assignedAt"], ["due_date", "dueDate"], ["payment", "payment"], ["completed_at", "completedAt"]]],
   ["attendance", "attendance.json", [["id", "id"], ["worker_id", "workerId"], ["att_date", "date"], ["status", "status"]]],
   ["change_requests", "change-requests.json", [["id", "id"], ["kind", "kind"], ["action", "action"], ["project_id", "projectId"], ["target_id", "targetId"], ["target_name", "targetName"], ["payload", "payload"], ["requested_by", "requestedBy"], ["created_at", "createdAt"], ["status", "status"], ["decision_note", "decisionNote"], ["decided_at", "decidedAt"]]],
@@ -47,6 +47,19 @@ export async function seedData(conn) {
         columns.map(([, key]) => toParam(record[key])),
       );
       inserted += result.affectedRows;
+    }
+  }
+  // Prices and floors sit inside each project in the JSON but in their own tables in MySQL.
+  const projects = JSON.parse(await readFile(path.join(MOCK, "projects.json"), "utf8"));
+  for (const project of projects) {
+    for (const r of project.rates ?? []) {
+      await conn.execute("INSERT IGNORE INTO project_rates (project_id, category, rate, units) VALUES (?, ?, ?, ?)", [project.id, r.category, r.rate, r.units ?? null]);
+    }
+    for (const [index, u] of (project.units ?? []).entries()) {
+      await conn.execute(
+        "INSERT IGNORE INTO project_units (project_id, category, floor, unit, area, sort_order) VALUES (?, ?, ?, ?, ?, ?)",
+        [project.id, u.category, u.floor, u.unit, u.area, index],
+      );
     }
   }
   await conn.execute(

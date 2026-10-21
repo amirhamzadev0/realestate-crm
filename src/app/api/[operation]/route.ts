@@ -47,7 +47,14 @@ async function run(request: NextRequest, { params }: RouteContext, method: "GET"
     }
     return reply({ data: await operation.handler(input, user) });
   } catch (error) {
-    if (error instanceof ZodError) return reply({ error: "Invalid input", issues: error.issues }, 400);
+    if (error instanceof ZodError) {
+      // Name the fields so the form can say what to fix, e.g. "Invalid input: totalUnits (expected int)".
+      const detail = error.issues
+        .slice(0, 3)
+        .map((issue) => `${issue.path.join(".") || "request"}: ${issue.message}`)
+        .join("; ");
+      return reply({ error: `Invalid input - ${detail}`, issues: error.issues }, 400);
+    }
     if (error instanceof AppError) return reply({ error: error.message }, error.status);
     console.error(error);
     // A database that cannot be reached is a temporary failure, not a bug in the request.

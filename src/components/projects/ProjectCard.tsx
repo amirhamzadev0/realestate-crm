@@ -2,18 +2,22 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import type { AccountSummary } from "@/models/accounts";
 import type { HrSummary } from "@/models/hr";
-import type { Project } from "@/models/project";
+import { categoryLabels, saleUnit, type Project } from "@/models/project";
 import { formatCompactMoney } from "@/utils/format";
 
 export function ProjectCard({
   project,
   accounts,
   hr,
+  unitsSold,
+  soldByCategory,
   href,
 }: {
   project: Project;
   accounts: AccountSummary;
   hr: HrSummary;
+  unitsSold?: number;
+  soldByCategory?: Record<string, number>;
   href: string;
 }) {
   return (
@@ -28,6 +32,37 @@ export function ProjectCard({
           <dt>Manager</dt>
           <dd>{project.adminName}</dd>
         </div>
+        <div>
+          <dt>Type</dt>
+          <dd>{project.type === "high-rise" ? "High-rise" : "Land plotting"}</dd>
+        </div>
+        <div>
+          <dt>Price {saleUnit[project.type].rate}</dt>
+          <dd>
+            {project.rates.length
+              ? project.rates.map((r) => `${categoryLabels[r.category]} ${formatCompactMoney(r.rate)}`).join(" · ")
+              : "Not set"}
+          </dd>
+        </div>
+        {project.rates.some((r) => r.units !== undefined) ? (
+          <div>
+            <dt>Units by type (left / total)</dt>
+            <dd>
+              {project.rates
+                .filter((r) => r.units !== undefined)
+                .map((r) => `${categoryLabels[r.category]} ${Math.max(0, (r.units ?? 0) - (soldByCategory?.[r.category] ?? 0))}/${r.units}`)
+                .join(" · ")}
+            </dd>
+          </div>
+        ) : null}
+        {unitsSold !== undefined ? (
+          <div>
+            <dt>Units left</dt>
+            <dd>
+              {Math.max(0, project.totalUnits - unitsSold)} / {project.totalUnits}
+            </dd>
+          </div>
+        ) : null}
         <div>
           <dt>Budget</dt>
           <dd>{formatCompactMoney(project.budget)}</dd>

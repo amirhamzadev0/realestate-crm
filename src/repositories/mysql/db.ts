@@ -24,6 +24,23 @@ export async function run(sql: string, params: Param[] = []): Promise<ResultSetH
   return result;
 }
 
+/** Runs several statements as one unit: all of them are saved, or none (an error rolls everything back). */
+export async function transaction<T>(work: (exec: (sql: string, params?: Param[]) => Promise<ResultSetHeader>) => Promise<T>): Promise<T> {
+  const connection = await getMysqlPool().getConnection();
+  try {
+    await connection.beginTransaction();
+    const exec = async (sql: string, params: Param[] = []) => (await connection.execute<ResultSetHeader>(sql, clean(params)))[0];
+    const result = await work(exec);
+    await connection.commit();
+    return result;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 /** Builds " WHERE a = ? AND b = ?" from a fixed list of conditions. */
 export function where(conditions: { sql: string; value: Param; when: boolean }[]): { clause: string; params: Param[] } {
   const active = conditions.filter((c) => c.when);

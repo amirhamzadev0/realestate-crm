@@ -4,6 +4,7 @@ export const superAdminNav: NavItem[] = [
   { label: "Dashboard", href: "/superadmin", icon: "LayoutDashboard" },
   { label: "Projects", href: "/superadmin/projects", icon: "Building2" },
   { label: "Approvals", href: "/superadmin/approvals", icon: "ClipboardCheck" },
+  { label: "Direct sales", href: "/superadmin/direct-sales", icon: "BadgeDollarSign" },
   { label: "Warehouse", href: "/warehouse", icon: "Warehouse" },
   { label: "Sales", href: "/sales", icon: "Handshake" },
 ];

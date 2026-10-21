@@ -28,8 +28,8 @@ export default async function ProjectsPage() {
     >
       <PageHeader title="Your projects" subtitle="Each project has its own accounts, inventory and HR" />
       <div className="grid grid--3">
-        {rows.map(({ project, accounts, hr }) => (
-          <ProjectCard key={project.id} project={project} accounts={accounts} hr={hr} href={`/projects/${project.slug}`} />
+        {rows.map(({ project, accounts, hr, unitsSold, soldByCategory }) => (
+          <ProjectCard key={project.id} project={project} accounts={accounts} hr={hr} unitsSold={unitsSold} soldByCategory={soldByCategory} href={`/projects/${project.slug}`} />
         ))}
       </div>
     </AppShell>
