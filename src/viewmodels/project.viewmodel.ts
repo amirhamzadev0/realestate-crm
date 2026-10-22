@@ -20,7 +20,7 @@ export const getProjectOverview = cache(async (slug: string) => {
     accounts,
     hr,
     lowStock: stock.filter((s) => s.low),
-    openRequests: requests.filter((r) => r.status === "pending" || r.status === "approved"),
+    openRequests: requests.filter((r) => r.status === "pending" || r.status === "ordered"),
   };
 });
 

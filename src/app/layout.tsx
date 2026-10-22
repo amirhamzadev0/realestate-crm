@@ -4,7 +4,7 @@ import "@/styles/globals.css";
 
 export const metadata: Metadata = {
   title: { default: "BuildFlow CRM", template: "%s | BuildFlow CRM" },
-  description: "Real estate CRM: projects, accounts, inventory, HR, warehouse and sales in one place.",
+  description: "Real estate CRM: projects, accounts, material orders, HR and sales in one place.",
 };
 
 export const viewport: Viewport = {

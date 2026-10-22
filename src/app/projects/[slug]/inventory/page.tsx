@@ -36,7 +36,7 @@ export default async function InventoryPage({ params }: { params: Promise<{ slug
       <div className="grid grid--3">
         <StatCard label="Materials available" value={String(stock.filter((s) => s.quantity > 0).length)} />
         <StatCard label="Running low" value={String(stock.filter((s) => s.low).length)} tone={stock.some((s) => s.low) ? "negative" : "default"} />
-        <StatCard label="Approved, waiting for warehouse stock" value={String(requests.filter((r) => r.status === "approved").length)} />
+        <StatCard label="On order, waiting to arrive" value={String(requests.filter((r) => r.status === "ordered").length)} />
       </div>
       <Card title="Current inventory (available on site now)">
         <StockTable stock={stock} />
@@ -49,8 +49,8 @@ export default async function InventoryPage({ params }: { params: Promise<{ slug
           <MaterialRequestForm projectId={project.id} requestedBy={project.adminName} materials={materials} />
         </Card>
       </div>
-      <Card title="Your requests (approved material is added to the inventory above automatically)">
-        <RequestTable requests={requests} showProject={false} />
+      <Card title="Your requests and orders (press Mark received when ordered material arrives; it is then added to the inventory above)">
+        <RequestTable requests={requests} showProject={false} mode="receive" />
       </Card>
     </>
   );

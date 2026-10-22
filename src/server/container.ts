@@ -45,6 +45,7 @@ export const accountService = new AccountService(accountRepository, projectRepos
 export const inventoryService = new InventoryService(
   useMysql ? new MysqlInventoryRepository() : new MockInventoryRepository(),
   projectRepository,
+  accountRepository,
 );
 export const hrService = new HrService(useMysql ? new MysqlHrRepository() : new MockHrRepository(), projectRepository);
 export const salesService = new SalesService(salesRepository, projectRepository, accountRepository);

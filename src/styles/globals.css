@@ -220,6 +220,11 @@ img {
   margin: 6px 0 0;
   padding-left: 18px;
 }
+.notice--warning {
+  background: #fff6e0;
+  border-color: #f0d18a;
+  color: #7a5200;
+}
 .notice--danger {
   background: #fdecec;
   border-color: #f2b8b8;
@@ -337,6 +342,20 @@ img {
 .review__facts dd {
   margin: 0;
   font-weight: 600;
+}
+
+.approval--stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+.order-details {
+  display: grid;
+  gap: 8px;
+  min-width: 260px;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-background);
 }
 
 /* ---------- ui primitives ---------- */

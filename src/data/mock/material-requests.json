@@ -27,9 +27,14 @@
     "note": "Plastering",
     "requestedBy": "Bilal Ahmed",
     "createdAt": "2026-10-02",
-    "status": "approved",
-    "decisionNote": "Approved, issue from warehouse",
-    "decidedAt": "2026-10-03"
+    "status": "ordered",
+    "decisionNote": "Approved, ordered from the supplier",
+    "decidedAt": "2026-10-03",
+    "orderedAt": "2026-10-03",
+    "vendor": "Lucky Cement Dealers",
+    "totalAmount": 3450000,
+    "paymentTerms": "on-delivery",
+    "amountPaid": 0
   },
   {
     "id": "r4",

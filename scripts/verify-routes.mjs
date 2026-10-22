@@ -60,8 +60,8 @@ check("login with bad email", (await fetch(`${base}/api/login`, { method: "POST"
 
 // ---- page access per role ----
 const matrix = {
-  owner: { home: "/superadmin", open: ["/superadmin", "/superadmin/projects", "/superadmin/approvals", "/projects", "/projects/green-valley", "/projects/green-valley/accounts", "/projects/green-valley/inventory", "/projects/green-valley/hr", "/warehouse", "/warehouse/issue", "/sales", "/sales/leads", "/sales/campaigns", "/sales/agents", "/sales/reports"], bounced: [] },
-  warehouse: { home: "/warehouse", open: ["/warehouse", "/warehouse/issue"], bounced: ["/superadmin", "/sales", "/projects/green-valley"] },
+  owner: { home: "/superadmin", open: ["/superadmin", "/superadmin/projects", "/superadmin/approvals", "/projects", "/projects/green-valley", "/projects/green-valley/accounts", "/projects/green-valley/inventory", "/projects/green-valley/hr", "/warehouse", "/sales", "/sales/leads", "/sales/campaigns", "/sales/agents", "/sales/reports"], bounced: [] },
+  warehouse: { home: "/warehouse", open: ["/warehouse"], bounced: ["/superadmin", "/sales", "/projects/green-valley"] },
   sales: { home: "/sales", open: ["/sales", "/sales/leads", "/sales/campaigns", "/sales/agents", "/sales/reports"], bounced: ["/superadmin", "/warehouse", "/projects/green-valley"] },
   "green-valley": { home: "/projects/green-valley", open: ["/projects/green-valley", "/projects/green-valley/accounts", "/projects/green-valley/inventory", "/projects/green-valley/hr"], bounced: ["/superadmin", "/warehouse", "/sales", "/projects/skyline-heights", "/projects"] },
 };
@@ -84,12 +84,15 @@ check("project admin reads own accounts", (await get("/api/getAccountSummary?pro
 check("project admin cannot read another project", (await get("/api/getAccountSummary?projectId=p2", own)).status, 403);
 check("project admin project list is only theirs", (await (await get("/api/getProjectList", own)).json()).data.length, 1);
 check("project admin cannot approve requests", (await post("/api/decideMaterialRequest", { requestId: "x", decision: "approved" }, own)).status, 403);
-check("project admin cannot touch warehouse", (await post("/api/receiveWarehouseStock", { materialId: "m1", quantity: 1 }, own)).status, 403);
+check("project admin cannot place an order", (await post("/api/orderMaterial", { projectId: "p1", materialId: "m1", quantity: 1 }, own)).status, 403);
+check("project admin cannot cancel an order", (await post("/api/rejectMaterialRequest", { requestId: "r3" }, own)).status, 403);
+check("project admin cannot receive another project's order", (await post("/api/receiveMaterial", { requestId: "r4" }, own)).status, 404);
 check("project admin cannot post another project's entry", (await post("/api/addAccountEntry", { projectId: "p2", date: "2026-10-01", type: "expense", amount: 1, description: "x", party: "x" }, own)).status, 403);
 check("project admin cannot request agent changes", (await post("/api/requestPersonChange", { kind: "agent", action: "add", payload: {} }, own)).status, 403);
 check("warehouse cannot read accounts", (await get("/api/getAccountSummary?projectId=p1", sessions.warehouse)).status, 403);
-check("warehouse reads stock", (await get("/api/getWarehouseStock", sessions.warehouse)).status, 200);
-check("sales cannot read stock", (await get("/api/getWarehouseStock", sessions.sales)).status, 403);
+check("orders desk reads requests", (await get("/api/getRequestList", sessions.warehouse)).status, 200);
+check("orders desk cannot decide requests", (await post("/api/decideMaterialRequest", { requestId: "r1", decision: "approved" }, sessions.warehouse)).status, 403);
+check("sales cannot read requests", (await get("/api/getRequestList", sessions.sales)).status, 403);
 check("sales reads report", (await get("/api/getSalesReport", sessions.sales)).status, 200);
 check("owner invalid body", (await post("/api/addLead", { name: "" }, sessions.owner)).status, 400);
 check("owner reads without projectId", (await get("/api/getAccountSummary", sessions.owner)).status, 400);

@@ -99,14 +99,13 @@ export const operations: Record<string, Operation> = {
   getAccountList: { method: "GET", access: PROJECT, projectScoped: true, handler: (i) => accountService.list(projectIdQuery.parse(i).projectId) },
   getAccountSummary: { method: "GET", access: PROJECT, projectScoped: true, handler: (i) => accountService.summary(projectIdQuery.parse(i).projectId) },
   getProjectStock: { method: "GET", access: PROJECT, projectScoped: true, handler: (i) => inventoryService.projectStock(projectIdQuery.parse(i).projectId) },
-  getWarehouseStock: { method: "GET", access: STORE, handler: () => inventoryService.warehouseStock() },
   getRequestList: {
     method: "GET",
     access: STORE_AND_SITE,
     projectScoped: true,
     handler: (i) =>
       inventoryService.listRequests(
-        z.object({ projectId: z.string().optional(), status: z.enum(["pending", "approved", "rejected", "fulfilled"]).optional() }).parse(i),
+        z.object({ projectId: z.string().optional(), status: z.enum(["pending", "ordered", "rejected", "fulfilled"]).optional() }).parse(i),
       ),
   },
   getChangeRequestList: {
@@ -146,16 +145,23 @@ export const operations: Record<string, Operation> = {
     handler: (i, user) => inventoryService.createRequest({ ...i, requestedBy: user.name }),
   },
   decideMaterialRequest: { method: "POST", access: ADMIN, handler: (i) => inventoryService.decide(i) },
-  fulfillMaterialRequest: {
+  // Material is ordered, not issued from a central stock: approving a request places the order,
+  // or the Super Admin / orders desk orders directly. A delivery goes straight into the project inventory.
+  orderMaterial: { method: "POST", access: STORE, handler: (i) => inventoryService.orderDirect(i) },
+  payOrder: { method: "POST", access: ADMIN, handler: (i) => inventoryService.payOrder(i) },
+  rejectMaterialRequest: { method: "POST", access: ADMIN, handler: (i) => inventoryService.rejectRequest(i) },
+  receiveMaterial: {
     method: "POST",
-    access: STORE,
-    handler: (i) => inventoryService.fulfill(z.object({ requestId: z.string().min(1) }).parse(i).requestId),
+    access: STORE_AND_SITE,
+    handler: (i, user) =>
+      // A project manager can only receive orders of their own project.
+      inventoryService.receive(
+        z.object({ requestId: z.string().min(1) }).parse(i).requestId,
+        user.role === "project-admin" ? (user.projectId ?? "") : undefined,
+      ),
   },
-  rejectMaterialRequest: { method: "POST", access: STORE, handler: (i) => inventoryService.rejectRequest(i) },
-  issueMaterialDirect: { method: "POST", access: STORE, handler: (i) => inventoryService.issueDirect(i) },
   recordMaterialUsage: { method: "POST", access: PROJECT, projectScoped: true, handler: (i) => inventoryService.recordUsage(i) },
-  addWarehouseItem: { method: "POST", access: STORE, handler: (i) => inventoryService.addNewItemToWarehouse(i) },
-  receiveWarehouseStock: { method: "POST", access: STORE, handler: (i) => inventoryService.receiveIntoWarehouse(i) },
+  addMaterial: { method: "POST", access: STORE, handler: (i) => inventoryService.addMaterial(i) },
   // People (workers, labour, agents) are only ever changed through a request the Super Admin approves.
   requestPersonChange: {
     method: "POST",

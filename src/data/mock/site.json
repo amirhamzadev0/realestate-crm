@@ -1,11 +1,11 @@
 {
   "name": "BuildFlow CRM",
-  "tagline": "Real estate operations, from warehouse to sale",
+  "tagline": "Real estate operations, from material order to sale",
   "portals": [
     {
       "role": "superadmin",
       "title": "Super Admin",
-      "description": "Builder / owner. All projects, approvals, warehouse and sales.",
+      "description": "Builder / owner. All projects, approvals, material orders and sales.",
       "href": "/superadmin",
       "icon": "Crown"
     },
@@ -18,10 +18,10 @@
     },
     {
       "role": "warehouse",
-      "title": "Warehouse",
-      "description": "Central stock and issuing material to projects.",
+      "title": "Orders",
+      "description": "Order material for projects and mark it delivered.",
       "href": "/warehouse",
-      "icon": "Warehouse"
+      "icon": "Truck"
     },
     {
       "role": "sales",

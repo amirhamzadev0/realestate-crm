@@ -24,15 +24,21 @@ Super Admin (builder / owner)
 
 ### Material workflow (the core cross-department flow)
 
+There is **no central warehouse stock**. Material is ordered for a project and goes straight into its inventory.
+
 ```text
-Project Admin   submitMaterialRequest      → status: pending
-Super Admin     decideMaterialRequest      → approved | rejected (with note)
-Warehouse       fulfillMaterialRequest     → warehouse stock − qty, project stock + qty → fulfilled
-Project Admin   recordMaterialUsage        → site stock − qty, "used" + qty
+Project Admin   submitMaterialRequest      -> status: pending
+Super Admin     decideMaterialRequest      -> approved = the order is placed (status: ordered) | rejected (with note)
+Super Admin     orderMaterial              -> orders for a project on their own (status: ordered, recorded as an order)
+Orders desk /   receiveMaterial            -> material arrived: project stock + qty, status: fulfilled
+Super Admin /
+Project Admin (own project only)
+Super Admin     rejectMaterialRequest      -> also cancels an order that has not arrived
+Project Admin   recordMaterialUsage        -> site stock - qty, "used" + qty
 ```
 
-Rules: only `pending` requests can be decided; only `approved` can be issued; issuing fails
-if the warehouse holds less than requested.
+Rules: only `pending` requests can be decided; only `ordered` can be received; only `pending` or `ordered` can be rejected or cancelled.
+`/warehouse` is now the **Orders** desk (place orders, mark deliveries, add a material to the list).
 
 ### People workflow (workers, labour, agents)
 

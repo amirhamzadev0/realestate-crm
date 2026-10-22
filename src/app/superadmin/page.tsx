@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { NewWarehouseItemForm } from "@/components/forms/NewWarehouseItemForm";
-import { ReceiveStockForm } from "@/components/forms/ReceiveStockForm";
+import { NewMaterialForm } from "@/components/forms/NewMaterialForm";
+import { OrderMaterialForm } from "@/components/forms/OrderMaterialForm";
 import { PayrollTable } from "@/components/hr/PayrollTable";
 import { ChangeRequestTable } from "@/components/people/ChangeRequestTable";
+import { PaymentsDueTable } from "@/components/inventory/PaymentsDueTable";
 import { RequestTable } from "@/components/inventory/RequestTable";
-import { StockTable } from "@/components/inventory/StockTable";
 import { ProjectCard } from "@/components/projects/ProjectCard";
 import { SalesReportCards } from "@/components/sales/SalesReportCards";
 import { Card, StatCard } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { formatCompactMoney } from "@/utils/format";
+import { formatCompactMoney, formatMoney } from "@/utils/format";
 import { getSuperAdminDashboard } from "@/viewmodels/superadmin.viewmodel";
 
 export const metadata: Metadata = { title: "Super Admin" };
@@ -62,23 +62,40 @@ export default async function SuperAdminPage() {
       <h2 className="section-title">Sales</h2>
       <SalesReportCards report={data.sales} />
 
-      <h2 className="section-title">Warehouse</h2>
+      <h2 className="section-title">Material orders</h2>
+      {data.paymentsDue.length > 0 ? (
+        <section className="notice notice--warning" role="status">
+          <strong>
+            {data.paymentsDue.length === 1 ? "1 delivered order is waiting for payment" : `${data.paymentsDue.length} delivered orders are waiting for payment`}
+          </strong>
+          <span>
+            {" "}
+            - {formatMoney(data.paymentsDue.reduce((sum, order) => sum + order.balanceDue, 0))} to send to vendors (see below).
+          </span>
+        </section>
+      ) : null}
+      <Card title={`Delivered, balance to send to vendors (${data.paymentsDue.length})`}>
+        <PaymentsDueTable orders={data.paymentsDue} canPay />
+      </Card>
+      <Card title={`Received at the projects, last 14 days (${data.recentlyReceived.length})`}>
+        <RequestTable requests={data.recentlyReceived} />
+      </Card>
       <Card
-        title="Warehouse stock"
+        title={`On order, waiting to arrive (${data.onOrder.length})`}
         action={
           <Link href="/warehouse" className="link">
-            Open warehouse
+            Open orders
           </Link>
         }
       >
-        <StockTable stock={data.warehouseStock} showUsed={false} />
+        <RequestTable requests={data.onOrder} mode="deliver" canCancel />
       </Card>
       <div className="grid grid--2">
-        <Card title="Add stock to an existing item">
-          <ReceiveStockForm materials={data.materials} successMessage="Stock added to the warehouse." />
+        <Card title="Order material for a project">
+          <OrderMaterialForm projects={data.projects} materials={data.materials} />
         </Card>
-        <Card title="Add a new item to the warehouse">
-          <NewWarehouseItemForm />
+        <Card title="Add a material to the list">
+          <NewMaterialForm />
         </Card>
       </div>
     </>

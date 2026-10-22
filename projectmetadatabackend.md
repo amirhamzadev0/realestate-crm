@@ -118,6 +118,7 @@ has been applied (`migrate.mjs` refuses and compares SHA-256 checksums); add `00
 | `002_core.sql` | `projects`, `account_entries`, `materials`, `stock_items`, `material_requests`, `workers`, `attendance`, `assignments`, `agents`, `campaigns`, `leads`, `sales`, `change_requests` |
 | `003_deployment_imports.sql` | `deployment_imports` (marker for the one-time demo-data import) |
 | `004`-`005` | `assignments.payment`, `completed_at`, `assigned_at` (task payment and dates) |
+| `014_orders_not_warehouse.sql` | central warehouse stock removed; `stock_items` is per project; requests gain `ordered` status, `ordered_at`, `received_at` |
 | `006_payroll.sql` | `workers.joined_at`, `payroll_payments` (salary / task payments the Super Admin has handed over) |
 
 Modelling notes:

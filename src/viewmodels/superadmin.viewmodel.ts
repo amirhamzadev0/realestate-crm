@@ -8,15 +8,14 @@ export const getSuperAdminDashboard = cache(async () => {
   const projects = await projectService.list();
   const [soldByProject, soldByCategory] = await Promise.all([salesService.unitsSold(), salesService.soldByCategory()]);
 
-  const [rows, pending, warehouse, report, pendingPeople, materials, pendingPayroll] = await Promise.all([
+  const [rows, requests, report, pendingPeople, materials, pendingPayroll] = await Promise.all([
     Promise.all(
       projects.map(async (project) => {
         const [accounts, hr] = await Promise.all([accountService.summary(project.id), hrService.summary(project.id)]);
         return { project, accounts, hr, unitsSold: soldByProject.get(project.id) ?? 0, soldByCategory: soldByCategory.get(project.id) ?? {} };
       }),
     ),
-    inventoryService.listRequests({ status: "pending" }),
-    inventoryService.warehouseStock(),
+    inventoryService.listRequests(),
     salesService.report(),
     changeRequestService.list({ status: "pending" }),
     inventoryService.listMaterials(),
@@ -28,10 +27,15 @@ export const getSuperAdminDashboard = cache(async () => {
     materials,
     pendingPayroll,
     projectNames: Object.fromEntries(projects.map((project) => [project.id, project.name])),
-    warehouseStock: warehouse,
-    pendingRequests: pending,
+    projects,
+    pendingRequests: requests.filter((r) => r.status === "pending"),
+    onOrder: requests.filter((r) => r.status === "ordered"),
+    paymentsDue: requests.filter((r) => r.status === "fulfilled" && r.balanceDue > 0),
+    // Orders the project managers marked received in the last two weeks, newest first, so the Super Admin sees them arrive.
+    recentlyReceived: requests
+      .filter((r) => r.status === "fulfilled" && (r.receivedAt ?? "") >= new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10))
+      .sort((a, b) => (b.receivedAt ?? "").localeCompare(a.receivedAt ?? "")),
     pendingPeople,
-    lowWarehouseStock: warehouse.filter((s) => s.low),
     sales: report,
     totals: {
       projects: projects.length,
@@ -42,15 +46,12 @@ export const getSuperAdminDashboard = cache(async () => {
 });
 
 export const getApprovalsPage = cache(async () => {
-  const [requests, people, warehouse] = await Promise.all([
-    inventoryService.listRequests(),
-    changeRequestService.list(),
-    inventoryService.warehouseStock(),
-  ]);
+  const [requests, people] = await Promise.all([inventoryService.listRequests(), changeRequestService.list()]);
   return {
     pending: requests.filter((r) => r.status === "pending"),
-    history: requests.filter((r) => r.status !== "pending"),
-    warehouse,
+    onOrder: requests.filter((r) => r.status === "ordered"),
+    paymentsDue: requests.filter((r) => r.status === "fulfilled" && r.balanceDue > 0),
+    history: requests.filter((r) => r.status === "fulfilled" || r.status === "rejected"),
     pendingPeople: people.filter((r) => r.status === "pending"),
     peopleHistory: people.filter((r) => r.status !== "pending"),
   };

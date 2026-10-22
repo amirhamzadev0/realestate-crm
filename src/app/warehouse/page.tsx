@@ -1,27 +1,43 @@
 import type { Metadata } from "next";
-import { NewWarehouseItemForm } from "@/components/forms/NewWarehouseItemForm";
-import { ReceiveStockForm } from "@/components/forms/ReceiveStockForm";
-import { StockTable } from "@/components/inventory/StockTable";
+import { NewMaterialForm } from "@/components/forms/NewMaterialForm";
+import { OrderMaterialForm } from "@/components/forms/OrderMaterialForm";
+import { PaymentsDueTable } from "@/components/inventory/PaymentsDueTable";
+import { RequestTable } from "@/components/inventory/RequestTable";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { getWarehousePage } from "@/viewmodels/warehouse.viewmodel";
+import { getCurrentUser } from "@/server/auth/session";
+import { getOrdersPage } from "@/viewmodels/warehouse.viewmodel";
 
-export const metadata: Metadata = { title: "Warehouse" };
+export const metadata: Metadata = { title: "Orders" };
 
-export default async function WarehousePage() {
-  const { stock, materials } = await getWarehousePage();
+export default async function OrdersPage() {
+  const { materials, projects, onOrder, paymentsDue, awaitingApproval, history } = await getOrdersPage();
+  // Only the Super Admin can cancel an order; the orders desk marks deliveries.
+  const canCancel = (await getCurrentUser())?.role === "superadmin";
 
   return (
     <>
-      <PageHeader title="Warehouse stock" subtitle="All material held centrally under the Super Admin" />
-      <Card title="Current inventory">
-        <StockTable stock={stock} showUsed={false} />
+      <PageHeader
+        title="Material orders"
+        subtitle="There is no central stock. Material is ordered for a project, and goes into that project's inventory when it is delivered."
+      />
+      <Card title="Order material for a project">
+        <OrderMaterialForm projects={projects} materials={materials} />
       </Card>
-      <Card title="Receive stock of an existing item">
-        <ReceiveStockForm materials={materials} />
+      <Card title={`On order, waiting to arrive (${onOrder.length})`}>
+        <RequestTable requests={onOrder} mode="deliver" canCancel={canCancel} />
       </Card>
-      <Card title="Add a new item">
-        <NewWarehouseItemForm />
+      <Card title={`Delivered, balance to send to vendors (${paymentsDue.length})`}>
+        <PaymentsDueTable orders={paymentsDue} canPay={canCancel} />
+      </Card>
+      <Card title={`Project requests waiting for the Super Admin (${awaitingApproval.length})`}>
+        <RequestTable requests={awaitingApproval} />
+      </Card>
+      <Card title="Delivered and rejected">
+        <RequestTable requests={history} />
+      </Card>
+      <Card title="Add a material to the list">
+        <NewMaterialForm />
       </Card>
     </>
   );

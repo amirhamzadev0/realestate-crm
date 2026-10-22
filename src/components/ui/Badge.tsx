@@ -3,6 +3,7 @@ export type BadgeTone = "neutral" | "success" | "warning" | "danger" | "info";
 const toneByStatus: Record<string, BadgeTone> = {
   pending: "warning",
   approved: "info",
+  ordered: "info",
   rejected: "danger",
   fulfilled: "success",
   todo: "neutral",

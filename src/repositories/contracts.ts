@@ -32,8 +32,8 @@ export interface AccountRepository {
 export interface InventoryRepository {
   listMaterials(): Promise<Material[]>;
   saveMaterial(material: Material): Promise<Material>;
-  listStock(scope: "project" | "warehouse", projectId?: string): Promise<StockItem[]>;
-  findStock(scope: "project" | "warehouse", projectId: string | null, materialId: string): Promise<StockItem | null>;
+  listStock(projectId: string): Promise<StockItem[]>;
+  findStock(projectId: string, materialId: string): Promise<StockItem | null>;
   saveStock(item: StockItem): Promise<StockItem>;
   listRequests(filter?: { projectId?: string; status?: RequestStatus }): Promise<MaterialRequest[]>;
   findRequest(id: string): Promise<MaterialRequest | null>;

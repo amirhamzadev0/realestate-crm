@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function WarehouseLayout({ children }: { children: ReactNode }) {
   const user = await requireRole(["superadmin", "warehouse"]);
   return (
-    <AppShell portal="Warehouse" subtitle="Central inventory" items={visibleNav(warehouseNav, user.role)} user={user}>
+    <AppShell portal="Orders" subtitle="Material ordering and delivery" items={visibleNav(warehouseNav, user.role)} user={user}>
       {children}
     </AppShell>
   );

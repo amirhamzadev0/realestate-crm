@@ -1,13 +1,14 @@
 import { ActionForm } from "@/components/forms/ActionForm";
 
-export function NewWarehouseItemForm() {
+/** Adds a material that can be requested and ordered (for example Sand, in tons). */
+export function NewMaterialForm() {
   return (
     <ActionForm
-      operation="addWarehouseItem"
-      submitLabel="Add new item"
-      successMessage="Item added to the warehouse."
+      operation="addMaterial"
+      submitLabel="Add material"
+      successMessage="Material added. It can now be requested and ordered."
       fields={[
-        { name: "name", label: "Item name", type: "text", required: true },
+        { name: "name", label: "Material name", type: "text", required: true },
         {
           name: "category",
           label: "Category",
@@ -21,8 +22,6 @@ export function NewWarehouseItemForm() {
           ],
         },
         { name: "unit", label: "Unit (kg, bag, pcs...)", type: "text", required: true },
-        { name: "quantity", label: "Quantity", type: "number", required: true },
-        { name: "minLevel", label: "Low-stock level", type: "number" },
       ]}
     />
   );

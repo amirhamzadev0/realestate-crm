@@ -9,15 +9,11 @@ export class MockInventoryRepository implements InventoryRepository {
   async saveMaterial(material: Material) {
     return upsert(getStore().materials, material);
   }
-  async listStock(scope: "project" | "warehouse", projectId?: string) {
-    return structuredClone(
-      getStore().stock.filter((s) => s.scope === scope && (scope === "warehouse" || s.projectId === projectId)),
-    );
+  async listStock(projectId: string) {
+    return structuredClone(getStore().stock.filter((s) => s.projectId === projectId));
   }
-  async findStock(scope: "project" | "warehouse", projectId: string | null, materialId: string) {
-    const found = getStore().stock.find(
-      (s) => s.scope === scope && s.projectId === projectId && s.materialId === materialId,
-    );
+  async findStock(projectId: string, materialId: string) {
+    const found = getStore().stock.find((s) => s.projectId === projectId && s.materialId === materialId);
     return found ? structuredClone(found) : null;
   }
   async saveStock(item: StockItem) {

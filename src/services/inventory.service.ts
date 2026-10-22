@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Material, MaterialRequest, MaterialRequestView, RequestStatus, StockItem, StockView } from "@/models/inventory";
-import type { InventoryRepository, ProjectRepository } from "@/repositories/contracts";
+import type { AccountRepository, InventoryRepository, ProjectRepository } from "@/repositories/contracts";
 import { AppError, notFound } from "@/utils/errors";
 import { newId, today } from "@/utils/id";
 
@@ -12,17 +12,46 @@ export const materialRequestSchema = z.object({
   requestedBy: z.string().trim().min(1).max(120),
 });
 
+/**
+ * What the Super Admin fills in when an order is placed: who supplies it, what it costs, the day it was ordered and
+ * how it is paid. With an advance, that part is paid now and debited from the project; the rest is paid after delivery.
+ */
+const orderDetailsSchema = z
+  .object({
+    vendor: z.string().trim().min(1, "Enter the vendor").max(120),
+    totalAmount: z.number().positive("Enter the amount of the order").max(Number.MAX_SAFE_INTEGER),
+    orderDate: z.iso.date().optional(),
+    paymentTerms: z.enum(["advance", "on-delivery"]).default("on-delivery"),
+    advanceAmount: z.number().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+  })
+  .superRefine((order, ctx) => {
+    if (order.orderDate && order.orderDate > today()) ctx.addIssue({ code: "custom", path: ["orderDate"], message: "The order date cannot be in the future" });
+    if (order.paymentTerms === "advance") {
+      if (order.advanceAmount === undefined) ctx.addIssue({ code: "custom", path: ["advanceAmount"], message: "Enter the advance amount" });
+      else if (order.advanceAmount > order.totalAmount) {
+        ctx.addIssue({ code: "custom", path: ["advanceAmount"], message: "The advance cannot be more than the order amount" });
+      }
+    }
+  });
+type OrderDetails = z.output<typeof orderDetailsSchema>;
+
 export const decisionSchema = z.object({
   requestId: z.string().min(1),
   decision: z.enum(["approved", "rejected"]),
   note: z.string().trim().max(500).default(""),
 });
 
-export const directIssueSchema = z.object({
+/** The Super Admin orders material for a project without waiting for a request. */
+export const directOrderSchema = z.object({
   projectId: z.string().min(1),
   materialId: z.string().min(1),
   quantity: z.number().positive().max(10_000_000),
   note: z.string().trim().max(500).default(""),
+});
+
+export const payOrderSchema = z.object({
+  requestId: z.string().min(1),
+  amount: z.number().positive().max(Number.MAX_SAFE_INTEGER).optional(), // defaults to the whole balance
 });
 
 export const usageSchema = z.object({
@@ -31,27 +60,33 @@ export const usageSchema = z.object({
   quantity: z.number().positive(),
 });
 
-export const warehouseReceiptSchema = z.object({
-  materialId: z.string().min(1),
-  quantity: z.number().positive().max(10_000_000),
-});
-
-export const newWarehouseItemSchema = z.object({
+export const newMaterialSchema = z.object({
   name: z.string().trim().min(1).max(80),
   category: z.enum(["structure", "finishing", "plumbing", "electrical"]),
   unit: z.string().trim().min(1).max(20),
-  quantity: z.number().positive().max(10_000_000),
-  minLevel: z.number().min(0).max(10_000_000).default(0),
 });
 
+/**
+ * Material has no central stock. A project manager asks the Super Admin; approving the request places the order, or the
+ * Super Admin orders directly. When the material arrives it is marked received and goes into the project's inventory.
+ */
 export class InventoryService {
   constructor(
     private repo: InventoryRepository,
     private projects: ProjectRepository,
+    private accounts: AccountRepository,
   ) {}
 
   listMaterials(): Promise<Material[]> {
     return this.repo.listMaterials();
+  }
+
+  /** Adds a material to the list that can be requested and ordered. A name that exists already is refused. */
+  async addMaterial(input: unknown): Promise<Material> {
+    const data = newMaterialSchema.parse(input);
+    const existing = (await this.repo.listMaterials()).find((m) => m.name.toLowerCase() === data.name.toLowerCase());
+    if (existing) throw new AppError(`${existing.name} is already in the material list`, 409);
+    return this.repo.saveMaterial({ ...data, id: newId("m") });
   }
 
   private async toStockViews(items: StockItem[]): Promise<StockView[]> {
@@ -65,11 +100,7 @@ export class InventoryService {
   }
 
   async projectStock(projectId: string): Promise<StockView[]> {
-    return this.toStockViews(await this.repo.listStock("project", projectId));
-  }
-
-  async warehouseStock(): Promise<StockView[]> {
-    return this.toStockViews(await this.repo.listStock("warehouse"));
+    return this.toStockViews(await this.repo.listStock(projectId));
   }
 
   async listRequests(filter?: { projectId?: string; status?: RequestStatus }): Promise<MaterialRequestView[]> {
@@ -85,10 +116,17 @@ export class InventoryService {
       materialName: materialById.get(r.materialId)?.name ?? "Unknown",
       unit: materialById.get(r.materialId)?.unit ?? "",
       projectName: projectById.get(r.projectId)?.name ?? "Unknown",
+      balanceDue: Math.max(0, (r.totalAmount ?? 0) - (r.amountPaid ?? 0)),
     }));
   }
 
-  /** Project admin asks the super admin for material. */
+  async getRequest(id: string): Promise<MaterialRequest> {
+    const request = await this.repo.findRequest(id);
+    if (!request) throw notFound("Request");
+    return request;
+  }
+
+  /** Project manager asks the Super Admin for material. */
   async createRequest(input: unknown): Promise<MaterialRequest> {
     const data = materialRequestSchema.parse(input);
     if (!(await this.projects.findById(data.projectId))) throw notFound("Project");
@@ -96,94 +134,137 @@ export class InventoryService {
     return this.repo.saveRequest({ ...data, id: newId("r"), createdAt: today(), status: "pending" });
   }
 
-  /** Super admin approves or rejects a pending request. */
+  /**
+   * Places the order: records the vendor, amount and payment terms, and debits any advance from the project's accounts.
+   * Returns the order fields to save on the request.
+   */
+  private async placeOrder(request: MaterialRequest, details: OrderDetails): Promise<Pick<MaterialRequest, "status" | "orderedAt" | "vendor" | "totalAmount" | "paymentTerms" | "amountPaid">> {
+    const orderedAt = details.orderDate ?? today();
+    const advance = details.paymentTerms === "advance" ? (details.advanceAmount ?? 0) : 0;
+    if (advance > 0) {
+      await this.debit(request, advance, orderedAt, `Advance for ${await this.materialName(request)} order`, details.vendor);
+    }
+    return {
+      status: "ordered",
+      orderedAt,
+      vendor: details.vendor,
+      totalAmount: details.totalAmount,
+      paymentTerms: details.paymentTerms,
+      amountPaid: advance,
+    };
+  }
+
+  private async materialName(request: MaterialRequest): Promise<string> {
+    return (await this.repo.listMaterials()).find((m) => m.id === request.materialId)?.name ?? "material";
+  }
+
+  /** A payment to a vendor is a debit in the project's accounts: it reduces the project's balance. */
+  private async debit(request: MaterialRequest, amount: number, date: string, description: string, vendor: string): Promise<void> {
+    await this.accounts.add({
+      id: newId("ac"),
+      projectId: request.projectId,
+      date,
+      type: "debit",
+      amount,
+      description: `${description} (${request.quantity} units)`,
+      party: vendor,
+    });
+  }
+
+  /** Super Admin rejects a pending request, or approves it, which places the order with its vendor, amount and payment terms. */
   async decide(input: unknown): Promise<MaterialRequest> {
     const data = decisionSchema.parse(input);
-    const request = await this.repo.findRequest(data.requestId);
-    if (!request) throw notFound("Request");
+    const request = await this.getRequest(data.requestId);
     if (request.status !== "pending") throw new AppError("Request was already decided", 409);
-    const decided = await this.repo.saveRequest({
-      ...request,
-      status: data.decision,
-      decisionNote: data.note,
-      decidedAt: today(),
-    });
-    if (data.decision === "rejected") return decided;
-
-    // Approval hands the material over straight away when the warehouse has it.
-    // Otherwise it stays "approved" and the warehouse issues it once restocked.
-    const source = await this.repo.findStock("warehouse", null, request.materialId);
-    return source && source.quantity >= request.quantity ? this.fulfill(request.id) : decided;
-  }
-
-  /** Moves stock from the warehouse to a project. Fails, changing nothing, when the warehouse holds less. */
-  private async transfer(projectId: string, materialId: string, quantity: number): Promise<void> {
-    const source = await this.repo.findStock("warehouse", null, materialId);
-    if (!source || source.quantity < quantity) throw new AppError("Not enough stock in the warehouse", 409);
-    const target = (await this.repo.findStock("project", projectId, materialId)) ?? {
-      id: newId("s"),
-      scope: "project" as const,
-      projectId,
-      materialId,
-      quantity: 0,
-      used: 0,
-      minLevel: 0,
-    };
-    await this.repo.saveStock({ ...source, quantity: source.quantity - quantity });
-    await this.repo.saveStock({ ...target, quantity: target.quantity + quantity });
-  }
-
-  /**
-   * Warehouse issues a request to the project. A request still waiting for the Super Admin can be issued
-   * directly too: issuing is then the approval.
-   */
-  async fulfill(requestId: string): Promise<MaterialRequest> {
-    const request = await this.repo.findRequest(requestId);
-    if (!request) throw notFound("Request");
-    if (request.status !== "approved" && request.status !== "pending") {
-      throw new AppError("Only open requests can be issued", 409);
+    const now = today();
+    if (data.decision === "rejected") {
+      return this.repo.saveRequest({ ...request, status: "rejected", decisionNote: data.note, decidedAt: now });
     }
-    await this.transfer(request.projectId, request.materialId, request.quantity);
-    return this.repo.saveRequest({
-      ...request,
-      status: "fulfilled",
-      decidedAt: request.decidedAt ?? today(),
-      ...(request.status === "pending" ? { decisionNote: "Issued by the warehouse" } : {}),
-    });
+    const order = await this.placeOrder(request, orderDetailsSchema.parse(input));
+    return this.repo.saveRequest({ ...request, ...order, decisionNote: data.note || "Approved, material ordered", decidedAt: now });
   }
 
-  /** Warehouse turns down an open request. The project is told through the note, and no stock moves. */
-  async rejectRequest(input: unknown): Promise<MaterialRequest> {
-    const data = z.object({ requestId: z.string().min(1), note: z.string().trim().max(500).default("") }).parse(input);
-    const request = await this.repo.findRequest(data.requestId);
-    if (!request) throw notFound("Request");
-    if (request.status !== "approved" && request.status !== "pending") {
-      throw new AppError("Only open requests can be rejected", 409);
-    }
-    return this.repo.saveRequest({
-      ...request,
-      status: "rejected",
-      decisionNote: data.note || "Rejected by the warehouse",
-      decidedAt: today(),
-    });
-  }
-
-  /** Warehouse sends material to a project without a request. It is recorded as an issued request so it shows in the history. */
-  async issueDirect(input: unknown): Promise<MaterialRequest> {
-    const data = directIssueSchema.parse(input);
+  /** Super Admin orders material for a project on their own. It is recorded as an order so it shows in the project's requests. */
+  async orderDirect(input: unknown): Promise<MaterialRequest> {
+    const data = directOrderSchema.parse(input);
+    const details = orderDetailsSchema.parse(input);
     if (!(await this.projects.findById(data.projectId))) throw notFound("Project");
     if (!(await this.repo.listMaterials()).some((m) => m.id === data.materialId)) throw notFound("Material");
-    await this.transfer(data.projectId, data.materialId, data.quantity);
-    return this.repo.saveRequest({
+    const now = today();
+    const request: MaterialRequest = {
       id: newId("r"),
       projectId: data.projectId,
       materialId: data.materialId,
       quantity: data.quantity,
       note: data.note,
-      requestedBy: "Warehouse (sent directly)",
-      createdAt: today(),
-      status: "fulfilled",
-      decisionNote: "Issued by the warehouse without a request",
+      requestedBy: "Super Admin (ordered directly)",
+      createdAt: now,
+      status: "pending",
+    };
+    const order = await this.placeOrder(request, details);
+    return this.repo.saveRequest({ ...request, ...order, decisionNote: "Ordered by the Super Admin", decidedAt: now });
+  }
+
+  /**
+   * The ordered material has arrived: it goes into the project's inventory and the order is closed. Whatever is still
+   * unpaid is then due to the vendor (see `payOrder`).
+   * `projectId` limits the check to one project (a project manager can only receive their own orders).
+   */
+  async receive(requestId: string, projectId?: string): Promise<MaterialRequest> {
+    const request = await this.getRequest(requestId);
+    if (projectId && request.projectId !== projectId) throw notFound("Request");
+    if (request.status !== "ordered") throw new AppError("Only an order that is on its way can be marked received", 409);
+
+    const stock = (await this.repo.findStock(request.projectId, request.materialId)) ?? {
+      id: newId("s"),
+      projectId: request.projectId,
+      materialId: request.materialId,
+      quantity: 0,
+      used: 0,
+      minLevel: 0,
+    };
+    await this.repo.saveStock({ ...stock, quantity: stock.quantity + request.quantity });
+    return this.repo.saveRequest({ ...request, status: "fulfilled", receivedAt: today() });
+  }
+
+  /** Orders that arrived and still have money owed to the vendor. */
+  async paymentsDue(): Promise<MaterialRequestView[]> {
+    return (await this.listRequests({ status: "fulfilled" })).filter((r) => r.balanceDue > 0);
+  }
+
+  /** The Super Admin sends the vendor the rest of the money (all of it, or `amount`). It is debited from the project's accounts. */
+  async payOrder(input: unknown): Promise<MaterialRequest> {
+    const data = payOrderSchema.parse(input);
+    const request = await this.getRequest(data.requestId);
+    if (request.totalAmount === undefined || !request.vendor) throw new AppError("This order has no amount to pay", 409);
+    if (request.status !== "fulfilled") throw new AppError("Pay the balance after the material has been delivered", 409);
+    const balance = request.totalAmount - (request.amountPaid ?? 0);
+    if (balance <= 0) throw new AppError("This order is already paid in full", 409);
+    const amount = data.amount ?? balance;
+    if (amount > balance) throw new AppError(`Only ${balance} is left to pay on this order`, 400);
+
+    const now = today();
+    await this.debit(request, amount, now, `${amount === balance ? "Balance" : "Part payment"} for ${await this.materialName(request)} order`, request.vendor);
+    const paid = (request.amountPaid ?? 0) + amount;
+    return this.repo.saveRequest({ ...request, amountPaid: paid, ...(paid >= request.totalAmount ? { paidAt: now } : {}) });
+  }
+
+  /**
+   * Super Admin turns down a pending request, or cancels an order that has not arrived. Nothing is added to the inventory.
+   * An advance that was already paid stays in the project's accounts: it has to be got back from the vendor.
+   */
+  async rejectRequest(input: unknown): Promise<MaterialRequest> {
+    const data = z.object({ requestId: z.string().min(1), note: z.string().trim().max(500).default("") }).parse(input);
+    const request = await this.getRequest(data.requestId);
+    if (request.status !== "pending" && request.status !== "ordered") {
+      throw new AppError("Only a pending request or an order that has not arrived can be rejected", 409);
+    }
+    const advance = request.amountPaid ?? 0;
+    const base = data.note || (request.status === "ordered" ? "Order cancelled" : "Rejected by the Super Admin");
+    return this.repo.saveRequest({
+      ...request,
+      status: "rejected",
+      decisionNote: advance > 0 ? `${base}. Advance of ${advance} was already paid to ${request.vendor}.` : base,
       decidedAt: today(),
     });
   }
@@ -191,45 +272,9 @@ export class InventoryService {
   /** Material consumed on site. */
   async recordUsage(input: unknown): Promise<StockItem> {
     const data = usageSchema.parse(input);
-    const stock = await this.repo.findStock("project", data.projectId, data.materialId);
+    const stock = await this.repo.findStock(data.projectId, data.materialId);
     if (!stock) throw notFound("Stock item");
     if (stock.quantity < data.quantity) throw new AppError("Not enough stock on site", 409);
     return this.repo.saveStock({ ...stock, quantity: stock.quantity - data.quantity, used: stock.used + data.quantity });
-  }
-
-  /** A brand-new material (not yet in the catalogue) goes straight into the warehouse. */
-  async addNewItemToWarehouse(input: unknown): Promise<StockItem> {
-    const data = newWarehouseItemSchema.parse(input);
-    const materials = await this.repo.listMaterials();
-    const existing = materials.find((m) => m.name.toLowerCase() === data.name.toLowerCase());
-    const material =
-      existing ??
-      (await this.repo.saveMaterial({ id: newId("m"), name: data.name, category: data.category, unit: data.unit }));
-    const stock = await this.repo.findStock("warehouse", null, material.id);
-    return this.repo.saveStock({
-      id: stock?.id ?? newId("s"),
-      scope: "warehouse",
-      projectId: null,
-      materialId: material.id,
-      quantity: (stock?.quantity ?? 0) + data.quantity,
-      used: stock?.used ?? 0,
-      minLevel: data.minLevel || stock?.minLevel || 0,
-    });
-  }
-
-  /** Purchased material arriving at the central warehouse. */
-  async receiveIntoWarehouse(input: unknown): Promise<StockItem> {
-    const data = warehouseReceiptSchema.parse(input);
-    if (!(await this.repo.listMaterials()).some((m) => m.id === data.materialId)) throw notFound("Material");
-    const stock = (await this.repo.findStock("warehouse", null, data.materialId)) ?? {
-      id: newId("s"),
-      scope: "warehouse" as const,
-      projectId: null,
-      materialId: data.materialId,
-      quantity: 0,
-      used: 0,
-      minLevel: 0,
-    };
-    return this.repo.saveStock({ ...stock, quantity: stock.quantity + data.quantity });
   }
 }

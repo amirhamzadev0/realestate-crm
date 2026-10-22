@@ -21,6 +21,6 @@ export function visibleNav(items: NavItem[], role: Role): NavItem[] {
 export const roleLabels: Record<Role, string> = {
   superadmin: "Super Admin",
   "project-admin": "Project Admin",
-  warehouse: "Warehouse",
+  warehouse: "Orders desk",
   sales: "Sales",
 };

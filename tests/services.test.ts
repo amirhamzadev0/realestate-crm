@@ -21,7 +21,7 @@ import { today } from "@/utils/id";
 const projects = new MockProjectRepository();
 const projectService = new ProjectService(projects, new MockManagerRepository(), new MockSalesRepository());
 const accounts = new AccountService(new MockAccountRepository(), projects);
-const inventory = new InventoryService(new MockInventoryRepository(), projects);
+const inventory = new InventoryService(new MockInventoryRepository(), projects, new MockAccountRepository());
 const hr = new HrService(new MockHrRepository(), projects);
 const sales = new SalesService(new MockSalesRepository(), projects, new MockAccountRepository());
 
@@ -50,63 +50,156 @@ describe("accounts", () => {
   });
 });
 
-describe("material workflow", () => {
-  it("request -> approve moves stock from warehouse to project", async () => {
-    const before = await inventory.warehouseStock();
-    const cementBefore = before.find((s) => s.materialId === "m2")!.quantity;
-    const siteBefore = (await inventory.projectStock("p2")).find((s) => s.materialId === "m2")!.quantity;
+const ORDER = { vendor: "Ali Traders", totalAmount: 100_000 };
 
+describe("material workflow", () => {
+  const siteQty = async (projectId: string, materialId: string) =>
+    (await inventory.projectStock(projectId)).find((s) => s.materialId === materialId)?.quantity ?? 0;
+
+  it("a request waits for the Super Admin, approving it places the order, and delivery fills the project inventory", async () => {
+    const before = await siteQty("p2", "m2");
     const request = await inventory.createRequest({ projectId: "p2", materialId: "m2", quantity: 500, requestedBy: "Sana" });
     assert.equal(request.status, "pending");
+    await assert.rejects(inventory.receive(request.id), /on its way/); // nothing to receive before it is ordered
 
-    const decided = await inventory.decide({ requestId: request.id, decision: "approved" });
-    assert.equal(decided.status, "fulfilled");
-    await assert.rejects(inventory.fulfill(request.id), /open requests/); // cannot be issued twice
+    const ordered = await inventory.decide({ requestId: request.id, decision: "approved", ...ORDER });
+    assert.equal(ordered.status, "ordered");
+    assert.equal(ordered.orderedAt, today());
+    assert.equal(await siteQty("p2", "m2"), before); // ordered is not delivered: the inventory has not changed yet
 
-    assert.equal((await inventory.warehouseStock()).find((s) => s.materialId === "m2")!.quantity, cementBefore - 500);
-    assert.equal((await inventory.projectStock("p2")).find((s) => s.materialId === "m2")!.quantity, siteBefore + 500);
-  });
-
-  it("lets the warehouse issue a request that is still pending", async () => {
-    const request = await inventory.createRequest({ projectId: "p2", materialId: "m2", quantity: 200, requestedBy: "Sana" });
-    const issued = await inventory.fulfill(request.id);
-    assert.equal(issued.status, "fulfilled");
-    assert.equal(issued.decisionNote, "Issued by the warehouse");
+    const received = await inventory.receive(request.id);
+    assert.equal(received.status, "fulfilled");
+    assert.equal(received.receivedAt, today());
+    assert.equal(await siteQty("p2", "m2"), before + 500);
+    await assert.rejects(inventory.receive(request.id), /on its way/); // cannot be received twice
     await assert.rejects(inventory.decide({ requestId: request.id, decision: "rejected" }), /already decided/);
   });
 
-  it("lets the warehouse reject an open request without moving stock, and not a closed one", async () => {
-    const cement = async () => (await inventory.warehouseStock()).find((s) => s.materialId === "m2")!.quantity;
-    const before = await cement();
-    const request = await inventory.createRequest({ projectId: "p1", materialId: "m2", quantity: 100, requestedBy: "Bilal" });
-    const rejected = await inventory.rejectRequest({ requestId: request.id, note: "Out of budget" });
+  it("rejecting a request moves nothing and keeps the reason for the project manager", async () => {
+    const before = await siteQty("p1", "m2");
+    const request = await inventory.createRequest({ projectId: "p1", materialId: "m2", quantity: 10, requestedBy: "Bilal" });
+    const rejected = await inventory.decide({ requestId: request.id, decision: "rejected", note: "Budget exceeded" });
     assert.equal(rejected.status, "rejected");
-    assert.equal(rejected.decisionNote, "Out of budget");
-    assert.equal(await cement(), before);
-    await assert.rejects(inventory.rejectRequest({ requestId: request.id }), /open requests/);
-    await assert.rejects(inventory.fulfill(request.id), /open requests/);
-    const defaultNote = await inventory.createRequest({ projectId: "p1", materialId: "m2", quantity: 1, requestedBy: "Bilal" });
-    assert.equal((await inventory.rejectRequest({ requestId: defaultNote.id })).decisionNote, "Rejected by the warehouse");
+    assert.equal(rejected.decisionNote, "Budget exceeded");
+    assert.equal(await siteQty("p1", "m2"), before);
+    await assert.rejects(inventory.receive(request.id), /on its way/);
   });
 
-  it("sends material to a project directly and records it", async () => {
-    const stock = async (scope: "warehouse" | "project") =>
-      (scope === "warehouse" ? await inventory.warehouseStock() : await inventory.projectStock("p3")).find((s) => s.materialId === "m2")?.quantity ?? 0;
-    const [wh, site] = [await stock("warehouse"), await stock("project")];
-    const record = await inventory.issueDirect({ projectId: "p3", materialId: "m2", quantity: 300, note: "Foundation work" });
-    assert.equal(record.status, "fulfilled");
-    assert.equal(await stock("warehouse"), wh - 300);
-    assert.equal(await stock("project"), site + 300);
-    assert.equal((await inventory.listRequests({ projectId: "p3" })).some((r) => r.id === record.id), true);
-    await assert.rejects(inventory.issueDirect({ projectId: "p3", materialId: "m2", quantity: 9_000_000 }), /Not enough stock/);
-    await assert.rejects(inventory.issueDirect({ projectId: "nope", materialId: "m2", quantity: 1 }), /Project not found/);
+  it("the Super Admin can order for a project directly, and it is recorded as an order", async () => {
+    const before = await siteQty("p3", "m1"); // no steel on site yet
+    const order = await inventory.orderDirect({ ...ORDER, projectId: "p3", materialId: "m1", quantity: 40, note: "Foundation" });
+    assert.equal(order.status, "ordered");
+    assert.equal(order.requestedBy, "Super Admin (ordered directly)");
+    assert.equal((await inventory.listRequests({ projectId: "p3", status: "ordered" })).some((r) => r.id === order.id), true);
+    assert.equal(await siteQty("p3", "m1"), before);
+    await inventory.receive(order.id);
+    assert.equal(await siteQty("p3", "m1"), before + 40); // a first delivery creates the stock line
+    await assert.rejects(inventory.orderDirect({ ...ORDER, projectId: "nope", materialId: "m1", quantity: 1 }), /Project not found/);
+    await assert.rejects(inventory.orderDirect({ ...ORDER, projectId: "p3", materialId: "nope", quantity: 1 }), /Material not found/);
   });
 
-  it("cannot decide twice or issue more than the warehouse holds", async () => {
-    const request = await inventory.createRequest({ projectId: "p1", materialId: "m6", quantity: 1000, requestedBy: "Bilal" });
-    await inventory.decide({ requestId: request.id, decision: "approved" });
-    await assert.rejects(inventory.decide({ requestId: request.id, decision: "rejected" }), /already decided/);
-    await assert.rejects(inventory.fulfill(request.id), /Not enough stock/);
+  it("a delivery is only accepted for the project it belongs to", async () => {
+    const order = await inventory.orderDirect({ ...ORDER, projectId: "p1", materialId: "m4", quantity: 1000 });
+    await assert.rejects(inventory.receive(order.id, "p2"), /Request not found/); // another project's manager
+    assert.equal((await inventory.receive(order.id, "p1")).status, "fulfilled");
+  });
+
+  it("the Super Admin can cancel an order that has not arrived, but not one that has", async () => {
+    const before = await siteQty("p1", "m5");
+    const order = await inventory.orderDirect({ ...ORDER, projectId: "p1", materialId: "m5", quantity: 100 });
+    const cancelled = await inventory.rejectRequest({ requestId: order.id });
+    assert.equal(cancelled.status, "rejected");
+    assert.equal(cancelled.decisionNote, "Order cancelled");
+    await assert.rejects(inventory.receive(order.id), /on its way/);
+
+    const delivered = await inventory.orderDirect({ ...ORDER, projectId: "p1", materialId: "m5", quantity: 100 });
+    await inventory.receive(delivered.id);
+    await assert.rejects(inventory.rejectRequest({ requestId: delivered.id }), /Only a pending request or an order/);
+    assert.equal(await siteQty("p1", "m5"), before + 100);
+  });
+
+  it("an order needs a vendor and an amount, and an advance cannot be more than the amount", async () => {
+    const base = { projectId: "p1", materialId: "m1", quantity: 1 };
+    await assert.rejects(inventory.orderDirect({ ...base }), ZodError);
+    await assert.rejects(inventory.orderDirect({ ...base, vendor: "", totalAmount: 10 }), ZodError);
+    await assert.rejects(inventory.orderDirect({ ...base, vendor: "V", totalAmount: 0 }), ZodError);
+    await assert.rejects(inventory.orderDirect({ ...base, vendor: "V", totalAmount: 100, paymentTerms: "advance" }), /Enter the advance amount/);
+    await assert.rejects(inventory.orderDirect({ ...base, vendor: "V", totalAmount: 100, paymentTerms: "advance", advanceAmount: 101 }), /cannot be more than the order amount/);
+    await assert.rejects(inventory.orderDirect({ ...base, vendor: "V", totalAmount: 100, orderDate: "2999-01-01" }), /cannot be in the future/);
+    // approving a request needs the same details, and a rejection does not
+    const request = await inventory.createRequest({ projectId: "p1", materialId: "m1", quantity: 1, requestedBy: "Bilal" });
+    await assert.rejects(inventory.decide({ requestId: request.id, decision: "approved" }), ZodError);
+    assert.equal((await inventory.decide({ requestId: request.id, decision: "rejected" })).status, "rejected");
+  });
+
+  it("pay on delivery: nothing is debited until the material is received, then the whole amount is due", async () => {
+    const entries = async () => (await accounts.list("p2")).filter((e) => e.type === "debit" && e.party === "Lucky Cement");
+    const before = (await entries()).length;
+    const debitBefore = (await accounts.summary("p2")).debit;
+    const order = await inventory.orderDirect({ projectId: "p2", materialId: "m2", quantity: 100, vendor: "Lucky Cement", totalAmount: 120_000, paymentTerms: "on-delivery", orderDate: "2026-10-01" });
+    assert.equal(order.vendor, "Lucky Cement");
+    assert.equal(order.totalAmount, 120_000);
+    assert.equal(order.orderedAt, "2026-10-01"); // the day it was placed
+    assert.equal(order.amountPaid, 0);
+    assert.equal((await entries()).length, before);
+    assert.equal((await inventory.paymentsDue()).some((r) => r.id === order.id), false); // not delivered yet
+
+    await inventory.receive(order.id);
+    const due = (await inventory.paymentsDue()).find((r) => r.id === order.id)!;
+    assert.equal(due.balanceDue, 120_000);
+
+    const balanceBefore = (await accounts.summary("p2")).balance;
+    const paid = await inventory.payOrder({ requestId: order.id });
+    assert.equal(paid.amountPaid, 120_000);
+    assert.equal(paid.paidAt, today());
+    assert.equal((await accounts.summary("p2")).balance, balanceBefore - 120_000); // debited from the project
+    assert.equal((await accounts.summary("p2")).debit, debitBefore + 120_000); // and shown under "Total debit"
+    const entry = (await entries()).find((e) => e.amount === 120_000)!;
+    assert.equal(entry.party, "Lucky Cement");
+    assert.match(entry.description, /Balance for Cement order/);
+    assert.equal((await inventory.paymentsDue()).some((r) => r.id === order.id), false);
+    await assert.rejects(inventory.payOrder({ requestId: order.id }), /already paid in full/);
+  });
+
+  it("advance: the advance is debited when the order is placed and only the rest is due after delivery", async () => {
+    const summary = () => accounts.summary("p1");
+    const start = (await summary()).balance;
+    const request = await inventory.createRequest({ projectId: "p1", materialId: "m3", quantity: 50, requestedBy: "Bilal" });
+    const order = await inventory.decide({ requestId: request.id, decision: "approved", vendor: "Premix Co", totalAmount: 500_000, paymentTerms: "advance", advanceAmount: 200_000 });
+    assert.equal(order.status, "ordered");
+    assert.equal(order.amountPaid, 200_000);
+    assert.equal((await summary()).balance, start - 200_000); // debited straight away
+
+    await assert.rejects(inventory.payOrder({ requestId: order.id }), /after the material has been delivered/);
+    await inventory.receive(order.id);
+    assert.equal((await inventory.paymentsDue()).find((r) => r.id === order.id)!.balanceDue, 300_000);
+
+    await assert.rejects(inventory.payOrder({ requestId: order.id, amount: 300_001 }), /Only 300000 is left/);
+    const part = await inventory.payOrder({ requestId: order.id, amount: 100_000 }); // a part payment
+    assert.equal(part.paidAt, undefined);
+    assert.equal((await inventory.paymentsDue()).find((r) => r.id === order.id)!.balanceDue, 200_000);
+    const full = await inventory.payOrder({ requestId: order.id });
+    assert.equal(full.amountPaid, 500_000);
+    assert.equal(full.paidAt, today());
+    assert.equal((await summary()).balance, start - 500_000); // the project paid exactly the order amount in total
+  });
+
+  it("cancelling an order that had an advance keeps the debit and says so", async () => {
+    const order = await inventory.orderDirect({ projectId: "p3", materialId: "m4", quantity: 1000, vendor: "Brick Kiln", totalAmount: 90_000, paymentTerms: "advance", advanceAmount: 30_000 });
+    const cancelled = await inventory.rejectRequest({ requestId: order.id, note: "Vendor delayed" });
+    assert.match(cancelled.decisionNote!, /Vendor delayed\. Advance of 30000 was already paid to Brick Kiln/);
+    const entry = (await accounts.list("p3")).find((e) => e.type === "debit" && e.amount === 30_000);
+    assert.ok(entry); // the advance is still in the accounts
+  });
+
+  it("adds a material to the list once", async () => {
+    const sand = await inventory.addMaterial({ name: "Sand", category: "structure", unit: "ton" });
+    assert.equal((await inventory.listMaterials()).some((m) => m.id === sand.id), true);
+    await assert.rejects(inventory.addMaterial({ name: "sand", category: "structure", unit: "ton" }), /already in the material list/);
+    await assert.rejects(inventory.addMaterial({ name: "", category: "structure", unit: "ton" }), ZodError);
+    // it can be requested and ordered straight away
+    const order = await inventory.orderDirect({ ...ORDER, projectId: "p1", materialId: sand.id, quantity: 5 });
+    assert.equal((await inventory.receive(order.id)).status, "fulfilled");
   });
 
   it("recording usage reduces stock and increases used", async () => {
@@ -115,6 +208,7 @@ describe("material workflow", () => {
     const after = (await inventory.projectStock("p1")).find((s) => s.materialId === "m1")!;
     assert.equal(after.quantity, before.quantity - 10);
     assert.equal(after.used, before.used + 10);
+    await assert.rejects(inventory.recordUsage({ projectId: "p1", materialId: "m1", quantity: 99_999 }), /Not enough stock/);
   });
 });
 
@@ -328,7 +422,7 @@ describe("people change requests", () => {
     assert.equal(request.requestedBy, "Bilal Ahmed");
     assert.equal((await hr.listWorkers("p1")).length, before);
 
-    await changes.decide({ requestId: request.id, decision: "approved" });
+    await changes.decide({ requestId: request.id, decision: "approved", ...ORDER });
     assert.equal((await hr.listWorkers("p1")).length, before + 1);
   });
 
@@ -345,11 +439,11 @@ describe("people change requests", () => {
       targetId: "w3",
       payload: { name: "Rafiq", type: "labour", role: "Senior Mason", dailyWage: 3200 },
     });
-    await changes.decide({ requestId: edit.id, decision: "approved" });
+    await changes.decide({ requestId: edit.id, decision: "approved", ...ORDER });
     assert.equal((await hr.getWorker("w3")).dailyWage, 3200);
 
     const removal = await changes.submit({ kind: "worker", action: "remove", targetId: "w3" });
-    await changes.decide({ requestId: removal.id, decision: "approved" });
+    await changes.decide({ requestId: removal.id, decision: "approved", ...ORDER });
     await assert.rejects(hr.getWorker("w3"), /not found/);
   });
 
@@ -361,30 +455,10 @@ describe("people change requests", () => {
 
   it("removing an agent keeps past sales but hides them from new work", async () => {
     const request = await changes.submit({ kind: "agent", action: "remove", targetId: "ag1" });
-    await changes.decide({ requestId: request.id, decision: "approved" });
+    await changes.decide({ requestId: request.id, decision: "approved", ...ORDER });
     assert.equal((await sales.getAgent("ag1")).active, false);
     assert.ok((await sales.report()).agents.some((a) => a.agentId === "ag1")); // has sales, commission still owed
-    await assert.rejects(changes.decide({ requestId: request.id, decision: "approved" }), /already decided/);
-  });
-});
-
-describe("approval adds stock to the project inventory", () => {
-  it("approve moves stock immediately when the warehouse has enough", async () => {
-    const siteBefore = (await inventory.projectStock("p1")).find((s) => s.materialId === "m3")!.quantity;
-    const whBefore = (await inventory.warehouseStock()).find((s) => s.materialId === "m3")!.quantity;
-    const decided = await inventory.decide({ requestId: "r1", decision: "approved" }); // 200 premix
-    assert.equal(decided.status, "fulfilled");
-    assert.equal((await inventory.projectStock("p1")).find((s) => s.materialId === "m3")!.quantity, siteBefore + 200);
-    assert.equal((await inventory.warehouseStock()).find((s) => s.materialId === "m3")!.quantity, whBefore - 200);
-  });
-
-  it("stays approved when the warehouse is short, and rejection moves nothing", async () => {
-    const short = await inventory.createRequest({ projectId: "p1", materialId: "m6", quantity: 1000, requestedBy: "Bilal" });
-    assert.equal((await inventory.decide({ requestId: short.id, decision: "approved" })).status, "approved");
-    const rejected = await inventory.createRequest({ projectId: "p1", materialId: "m2", quantity: 10, requestedBy: "Bilal" });
-    const before = (await inventory.projectStock("p1")).find((s) => s.materialId === "m2")!.quantity;
-    await inventory.decide({ requestId: rejected.id, decision: "rejected" });
-    assert.equal((await inventory.projectStock("p1")).find((s) => s.materialId === "m2")!.quantity, before);
+    await assert.rejects(changes.decide({ requestId: request.id, decision: "approved", ...ORDER }), /already decided/);
   });
 });
 
