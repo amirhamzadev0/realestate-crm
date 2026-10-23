@@ -1,8 +1,14 @@
-import type { Agent, Lead, LeadStatus, Sale } from "@/models/sales";
+import type { Agent, Lead, LeadContact, LeadStatus, MonthlyReportSnapshot, Sale, SalesManager } from "@/models/sales";
 import type { SalesRepository } from "@/repositories/contracts";
 import { getStore, upsert } from "./store";
 
 export class MockSalesRepository implements SalesRepository {
+  async listSalesManagers() {
+    return structuredClone([...getStore().salesManagers].sort((a, b) => a.name.localeCompare(b.name)));
+  }
+  async saveSalesManager(manager: SalesManager) {
+    return upsert(getStore().salesManagers, manager);
+  }
   async listAgents() {
     return structuredClone(getStore().agents);
   }
@@ -11,6 +17,22 @@ export class MockSalesRepository implements SalesRepository {
   }
   async listCampaigns() {
     return structuredClone(getStore().campaigns);
+  }
+  async listMonthlyReports() {
+    return structuredClone([...getStore().monthlyReports].sort((a, b) => b.period.localeCompare(a.period)));
+  }
+  async saveMonthlyReport(report: MonthlyReportSnapshot) {
+    const reports = getStore().monthlyReports;
+    const index = reports.findIndex((r) => r.period === report.period);
+    if (index === -1) reports.push(structuredClone(report));
+    else reports[index] = structuredClone(report);
+    return structuredClone(report);
+  }
+  async listLeadContacts() {
+    return structuredClone(getStore().leadContacts);
+  }
+  async saveLeadContact(contact: LeadContact) {
+    return upsert(getStore().leadContacts, contact);
   }
   async listLeads() {
     return structuredClone([...getStore().leads].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));

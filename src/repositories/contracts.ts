@@ -3,7 +3,7 @@ import type { Project } from "@/models/project";
 import type { AccountEntry } from "@/models/accounts";
 import type { Material, MaterialRequest, RequestStatus, StockItem } from "@/models/inventory";
 import type { AssignmentStatus, AttendanceRecord, PayrollPayment, Worker, WorkAssignment } from "@/models/hr";
-import type { Agent, Campaign, Lead, LeadStatus, Sale } from "@/models/sales";
+import type { Agent, Campaign, Lead, LeadContact, LeadStatus, MonthlyReportSnapshot, Sale, SalesManager } from "@/models/sales";
 import type { ChangeRequest, ChangeStatus } from "@/models/changes";
 import type { PortalInfo } from "@/models/site";
 
@@ -56,9 +56,15 @@ export interface HrRepository {
 }
 
 export interface SalesRepository {
+  listSalesManagers(): Promise<SalesManager[]>;
+  saveSalesManager(manager: SalesManager): Promise<SalesManager>;
   listAgents(): Promise<Agent[]>;
   saveAgent(agent: Agent): Promise<Agent>;
   listCampaigns(): Promise<Campaign[]>;
+  listMonthlyReports(): Promise<MonthlyReportSnapshot[]>;
+  saveMonthlyReport(report: MonthlyReportSnapshot): Promise<MonthlyReportSnapshot>;
+  listLeadContacts(): Promise<LeadContact[]>;
+  saveLeadContact(contact: LeadContact): Promise<LeadContact>;
   listLeads(): Promise<Lead[]>;
   saveLead(lead: Lead): Promise<Lead>;
   setLeadStatus(id: string, status: LeadStatus): Promise<Lead | null>;

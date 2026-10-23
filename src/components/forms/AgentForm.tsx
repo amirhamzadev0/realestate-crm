@@ -1,7 +1,7 @@
 import { ActionForm, type FieldSpec } from "@/components/forms/ActionForm";
-import type { Agent } from "@/models/sales";
+import type { Agent, SalesManager } from "@/models/sales";
 
-function fields(agent?: Agent): FieldSpec[] {
+function fields(managers: SalesManager[], agent?: Agent): FieldSpec[] {
   return [
     { name: "name", label: "Name", type: "text", required: true, defaultValue: agent?.name },
     { name: "phone", label: "Phone", type: "text", defaultValue: agent?.phone },
@@ -13,31 +13,37 @@ function fields(agent?: Agent): FieldSpec[] {
       defaultValue: String(agent?.commissionRate ?? 2),
       step: "0.1",
     },
+    {
+      name: "managerId",
+      label: "Sales manager (whose team)",
+      type: "select",
+      required: true,
+      defaultValue: agent?.managerId ?? undefined,
+      options: managers.map((m) => ({ value: m.id, label: m.name })),
+    },
   ];
 }
 
-export function AgentForm() {
+/** The sales manager creates an agent straight away; no approval is needed. */
+export function AgentForm({ managers }: { managers: SalesManager[] }) {
   return (
     <ActionForm
-      operation="requestPersonChange"
-      submitLabel="Send add request to Super Admin"
-      successMessage="Request sent. The agent is added once the Super Admin approves."
-      hidden={{ kind: "agent", action: "add" }}
-      payloadKey="payload"
-      fields={fields()}
+      operation="createAgent"
+      submitLabel="Create agent"
+      successMessage="Agent created. They can see their own portal."
+      fields={fields(managers)}
     />
   );
 }
 
-export function AgentEditForm({ agent }: { agent: Agent }) {
+export function AgentEditForm({ agent, managers }: { agent: Agent; managers: SalesManager[] }) {
   return (
     <ActionForm
-      operation="requestPersonChange"
-      submitLabel="Send edit request to Super Admin"
-      successMessage="Edit request sent for approval."
-      hidden={{ kind: "agent", action: "edit", targetId: agent.id }}
-      payloadKey="payload"
-      fields={fields(agent)}
+      operation="updateAgent"
+      submitLabel="Save agent"
+      successMessage="Agent updated."
+      hidden={{ id: agent.id }}
+      fields={fields(managers, agent)}
     />
   );
 }

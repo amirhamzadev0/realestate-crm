@@ -110,6 +110,13 @@ export const getDirectSalesPage = cache(async (slug?: string) => {
         return { category, floor, total: all.length, sold: all.length - free, free, area: all.map((u) => u.area) };
       })
     : [];
+  // Every unit of a high-rise with whether it is sold, and the sale when it is, for the units list.
+  const unitRows = chosen
+    ? chosen.project.units.map((u) => ({
+        ...u,
+        sale: allSales.find((s) => s.projectId === chosen.project.id && s.unit.toLowerCase() === u.unit.toLowerCase()) ?? null,
+      }))
+    : [];
   const saleProject = chosen ? (await salesService.saleProjects([chosen.project]))[0] : null;
   const sales = chosen ? allSales.filter((s) => s.projectId === chosen.project.id).sort((a, b) => b.date.localeCompare(a.date)) : [];
   return {
@@ -120,10 +127,39 @@ export const getDirectSalesPage = cache(async (slug?: string) => {
           sales,
           categoryRows,
           floorRows,
+          unitRows,
           saleProject,
           revenue: sales.reduce((sum, s) => sum + s.price, 0),
           agentNames: Object.fromEntries(agents.map((a) => [a.id, a.name])),
         }
       : null,
+  };
+});
+
+/** The sales department for the Super Admin: its managers with their team size, and every agent with their results. */
+export const getSalesTeamPage = cache(async () => {
+  const [managers, agents, sales, report] = await Promise.all([
+    salesService.listSalesManagers(),
+    salesService.listAgents(),
+    salesService.listSales(),
+    salesService.report(),
+  ]);
+  const managerName = new Map(managers.map((m) => [m.id, m.name]));
+  const performance = new Map(report.agents.map((a) => [a.agentId, a]));
+  return {
+    managers: managers.map((m) => ({
+      ...m,
+      agentCount: agents.filter((a) => a.managerId === m.id && a.active).length,
+      ownSales: sales.filter((s) => s.soldByManagerId === m.id).length,
+    })),
+    agents: agents
+      .filter((a) => a.active)
+      .map((a) => ({
+        ...a,
+        managerName: a.managerId ? (managerName.get(a.managerId) ?? "-") : "-",
+        sales: performance.get(a.id)?.sales ?? 0,
+        revenue: performance.get(a.id)?.revenue ?? 0,
+        commission: performance.get(a.id)?.commission ?? 0,
+      })),
   };
 });

@@ -11,3 +11,16 @@ export function formatDate(iso: string): string {
 }
 
 export const phoneHref = (phone: string) => `tel:${phone.replace(/[^+\d]/g, "")}`;
+
+/** A number for wa.me: digits only, with the country code. "0333-1000001" -> "923331000001" (Pakistan). */
+export function whatsappNumber(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("00")) return digits.slice(2);
+  if (digits.startsWith("0")) return `92${digits.slice(1)}`;
+  return digits;
+}
+
+/** "2026-10" -> "Oct 2026". */
+export function formatMonth(period: string): string {
+  return new Date(`${period}-01T00:00:00Z`).toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" });
+}

@@ -1,6 +1,8 @@
+import { AssignLeadSelect } from "@/components/forms/AssignLeadSelect";
 import { StatusSelect } from "@/components/forms/StatusSelect";
 import { EmptyState } from "@/components/ui/PageHeader";
-import type { Agent, Campaign, Lead } from "@/models/sales";
+import { LeadContactCounts } from "@/components/sales/LeadContactCounts";
+import type { Agent, Lead, LeadContactSummary } from "@/models/sales";
 import { formatDate, phoneHref } from "@/utils/format";
 
 const stages = ["new", "contacted", "site-visit", "negotiation", "won", "lost"];
@@ -8,19 +10,17 @@ const stages = ["new", "contacted", "site-visit", "negotiation", "won", "lost"];
 export function LeadTable({
   leads,
   agents,
-  campaigns,
   projectNames,
   editable = true,
 }: {
-  leads: Lead[];
+  leads: (Lead & { contacts?: LeadContactSummary })[];
   agents: Agent[];
-  campaigns: Campaign[];
   projectNames: Record<string, string>;
   editable?: boolean;
 }) {
   if (leads.length === 0) return <EmptyState>No leads yet.</EmptyState>;
   const agentName = new Map(agents.map((a) => [a.id, a.name]));
-  const campaignName = new Map(campaigns.map((c) => [c.id, c.name]));
+  const activeAgents = agents.filter((a) => a.active);
 
   return (
     <div className="table-wrap">
@@ -30,8 +30,9 @@ export function LeadTable({
             <th>Lead</th>
             <th>Project</th>
             <th>Source</th>
-            <th>Agent</th>
+            <th>Forward to agent</th>
             <th>Date</th>
+            <th>Contacted</th>
             <th>Stage</th>
           </tr>
         </thead>
@@ -45,14 +46,25 @@ export function LeadTable({
                     {lead.phone}
                   </a>
                 </div>
+                {lead.email ? <div className="muted">{lead.email}</div> : null}
+                {lead.note ? <div className="muted">{lead.note}</div> : null}
               </td>
               <td>{projectNames[lead.projectId] ?? "-"}</td>
+              <td>{lead.source}</td>
               <td>
-                {lead.source}
-                {lead.campaignId ? <div className="muted">{campaignName.get(lead.campaignId)}</div> : null}
+                {editable ? (
+                  <AssignLeadSelect leadId={lead.id} agentId={lead.agentId} agents={activeAgents} />
+                ) : lead.agentId ? (
+                  agentName.get(lead.agentId)
+                ) : (
+                  <span className="muted">Unassigned</span>
+                )}
+                {lead.agentId && lead.assignedAt ? <div className="muted">forwarded {formatDate(lead.assignedAt)}</div> : null}
               </td>
-              <td>{lead.agentId ? agentName.get(lead.agentId) : <span className="muted">Unassigned</span>}</td>
               <td>{formatDate(lead.createdAt)}</td>
+              <td>
+                <LeadContactCounts contacts={lead.contacts} />
+              </td>
               <td>
                 {editable ? (
                   <StatusSelect operation="setLeadStatus" id={lead.id} value={lead.status} options={stages} />

@@ -10,14 +10,14 @@ import { getSalesReportPage } from "@/viewmodels/sales.viewmodel";
 export const metadata: Metadata = { title: "Sales & Commission" };
 
 export default async function SalesReportPage() {
-  const { report, sales, projects, agents } = await getSalesReportPage();
+  const { report, sales, projects, sellers } = await getSalesReportPage();
 
   return (
     <>
       <PageHeader title="Sales and commission" subtitle="Every sale with the commission owed to the agent" />
       <SalesReportCards report={report} />
       <Card title="Record a sale">
-        <SaleForm mode="agent" projects={projects} agents={agents} />
+        <SaleForm mode="agent" projects={projects} sellers={sellers} />
       </Card>
       <Card title="Sales report">
         {sales.length === 0 ? (

@@ -14,8 +14,18 @@ export interface Campaign {
   active: boolean;
 }
 
+/** Runs the sales department: creates agents, and can record sales too. */
+export interface SalesManager {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  active: boolean;
+}
+
 export interface Agent {
   id: string;
+  managerId: string | null; // the sales manager who created this agent
   name: string;
   phone: string;
   commissionRate: number; // percent of sale price
@@ -29,15 +39,75 @@ export interface Lead {
   projectId: string;
   source: LeadSource;
   campaignId: string | null;
-  agentId: string | null;
+  agentId: string | null; // the agent the lead was forwarded to
   status: LeadStatus;
   createdAt: string;
+  email?: string;
+  note?: string;
+  assignedAt?: string; // the day the lead was forwarded to the agent
+}
+
+export type ContactChannel = "call" | "whatsapp";
+
+/** One time an agent called or messaged a lead's client. */
+export interface LeadContact {
+  id: string;
+  leadId: string;
+  agentId: string;
+  channel: ContactChannel;
+  at: string; // ISO date and time (UTC)
+  comment?: string; // what was discussed
+  followUpAt?: string; // ISO date and time (UTC): when the client asked to be contacted again
+  followUpDone?: boolean; // the agent followed up (or marked it done)
+}
+
+/** How often, and when last, a lead's client was contacted. */
+export interface LeadContactSummary {
+  calls: number;
+  whatsapp: number;
+  lastAt?: string;
+  lastComment?: string; // the note of the latest contact that has one
+  nextFollowUpAt?: string; // the nearest follow-up that is still open
+}
+
+/** A follow-up the agent has to do: the lead, and what was said last time. */
+export interface FollowUp {
+  contactId: string;
+  leadId: string;
+  leadName: string;
+  leadPhone: string;
+  projectId: string;
+  at: string; // ISO date and time (UTC) the follow-up is due
+  comment: string;
+  channel: ContactChannel;
+}
+
+/** One line of a sales report: an agent, the sales manager selling himself, or the Super Admin's direct sales. */
+export interface AgentReportRow {
+  key: string; // agent id, manager id, or "direct"
+  kind: "agent" | "manager" | "direct";
+  name: string;
+  leads: number; // leads forwarded to the agent in the period
+  calls: number;
+  whatsapp: number;
+  units: number; // units sold
+  revenue: number; // what the buyers paid
+  commission: number; // owed to the agent on those sales
+}
+
+/** A monthly report as it was saved. A month that is not over yet is saved as "so far" (`final: false`) until it ends. */
+export interface MonthlyReportSnapshot {
+  period: string; // "2026-10"
+  final: boolean;
+  generatedAt: string; // ISO date and time
+  rows: AgentReportRow[];
 }
 
 export interface Sale {
   id: string;
   projectId: string;
-  agentId: string | null; // null for a direct sale made by the Super Admin
+  agentId: string | null; // the agent who sold it; null when a sales manager or the Super Admin sold it
+  soldByManagerId?: string | null; // set when a sales manager sold it himself (no commission)
   leadId: string | null;
   buyer?: string; // buyer details are required for direct sales
   buyerPhone?: string;

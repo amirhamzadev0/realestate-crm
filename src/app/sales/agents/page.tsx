@@ -1,27 +1,27 @@
 import type { Metadata } from "next";
 import { AgentForm } from "@/components/forms/AgentForm";
-import { ChangeRequestTable } from "@/components/people/ChangeRequestTable";
 import { AgentManageTable } from "@/components/sales/AgentManageTable";
 import { Card } from "@/components/ui/Card";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { EmptyState, PageHeader } from "@/components/ui/PageHeader";
 import { getAgentsPage } from "@/viewmodels/sales.viewmodel";
 
 export const metadata: Metadata = { title: "Agents" };
 
 export default async function AgentsPage() {
-  const { performance, agents, changes, pendingIds } = await getAgentsPage();
+  const { performance, agents, managers } = await getAgentsPage();
 
   return (
     <>
-      <PageHeader title="Agents" subtitle="Sales team, leads handled and commission earned" />
+      <PageHeader title="Agents" subtitle="Create your agents, see the leads they handle and the commission they earn. Each agent has their own portal." />
       <Card title="Team">
-        <AgentManageTable agents={agents} performance={performance} pendingIds={pendingIds} />
+        <AgentManageTable agents={agents} performance={performance} managers={managers} />
       </Card>
-      <Card title="Request a new agent">
-        <AgentForm />
-      </Card>
-      <Card title="Requests sent to Super Admin">
-        <ChangeRequestTable requests={changes} />
+      <Card title="Create a new agent">
+        {managers.length === 0 ? (
+          <EmptyState>The Super Admin has to create a sales manager first (Sales team).</EmptyState>
+        ) : (
+          <AgentForm managers={managers} />
+        )}
       </Card>
     </>
   );

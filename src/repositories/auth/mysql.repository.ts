@@ -4,7 +4,7 @@ import type { AuthUser, UserCredential } from "@/models/auth";
 import { run, select, selectOne, type Row } from "@/repositories/mysql/db";
 import type { SessionRepository, UserRepository } from "./contracts";
 
-const COLUMNS = "id, email, name, role, project_id AS projectId";
+const COLUMNS = "id, email, name, role, project_id AS projectId, agent_id AS agentId";
 
 const decodeUser = (row: Row) => row as unknown as AuthUser;
 

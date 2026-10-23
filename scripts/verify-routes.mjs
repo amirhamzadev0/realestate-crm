@@ -60,9 +60,9 @@ check("login with bad email", (await fetch(`${base}/api/login`, { method: "POST"
 
 // ---- page access per role ----
 const matrix = {
-  owner: { home: "/superadmin", open: ["/superadmin", "/superadmin/projects", "/superadmin/approvals", "/projects", "/projects/green-valley", "/projects/green-valley/accounts", "/projects/green-valley/inventory", "/projects/green-valley/hr", "/warehouse", "/sales", "/sales/leads", "/sales/campaigns", "/sales/agents", "/sales/reports"], bounced: [] },
+  owner: { home: "/superadmin", open: ["/superadmin", "/superadmin/projects", "/superadmin/approvals", "/projects", "/projects/green-valley", "/projects/green-valley/accounts", "/projects/green-valley/inventory", "/projects/green-valley/hr", "/warehouse", "/sales", "/sales/leads", "/sales/agents", "/sales/reports"], bounced: [] },
   warehouse: { home: "/warehouse", open: ["/warehouse"], bounced: ["/superadmin", "/sales", "/projects/green-valley"] },
-  sales: { home: "/sales", open: ["/sales", "/sales/leads", "/sales/campaigns", "/sales/agents", "/sales/reports"], bounced: ["/superadmin", "/warehouse", "/projects/green-valley"] },
+  sales: { home: "/sales", open: ["/sales", "/sales/leads", "/sales/agents", "/sales/reports"], bounced: ["/superadmin", "/warehouse", "/projects/green-valley"] },
   "green-valley": { home: "/projects/green-valley", open: ["/projects/green-valley", "/projects/green-valley/accounts", "/projects/green-valley/inventory", "/projects/green-valley/hr"], bounced: ["/superadmin", "/warehouse", "/sales", "/projects/skyline-heights", "/projects"] },
 };
 const sessions = {};

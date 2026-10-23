@@ -2,7 +2,7 @@
 import { connect } from "../lib/db.mjs";
 
 const EXPECTED = {
-  users: ["id", "email", "name", "password_hash", "role", "project_id", "enabled"],
+  users: ["id", "email", "name", "password_hash", "role", "project_id", "agent_id", "enabled"],
   sessions: ["token_hash", "user_id", "expires_at"],
   projects: ["id", "slug", "name", "location", "status", "start_date", "total_units", "budget", "project_type", "manager_id", "admin_name", "image", "sort_order"],
   project_rates: ["project_id", "category", "rate", "units"],
@@ -16,10 +16,13 @@ const EXPECTED = {
   payroll_payments: ["id", "project_id", "worker_id", "kind", "ref", "amount", "paid_at"],
   attendance: ["id", "worker_id", "att_date", "status"],
   assignments: ["id", "project_id", "worker_id", "task", "status", "assigned_at", "due_date", "payment", "completed_at"],
-  agents: ["id", "name", "phone", "commission_rate", "active"],
+  sales_reports: ["period", "is_final", "generated_at", "payload"],
+  lead_contacts: ["id", "lead_id", "agent_id", "channel", "contacted_at", "comment", "follow_up_at", "follow_up_done"],
+  sales_managers: ["id", "name", "phone", "email", "active"],
+  agents: ["id", "manager_id", "name", "phone", "commission_rate", "active"],
   campaigns: ["id", "name", "platform", "project_id", "budget", "start_date", "active"],
-  leads: ["id", "name", "phone", "project_id", "source", "campaign_id", "agent_id", "status", "created_at"],
-  sales: ["id", "project_id", "agent_id", "lead_id", "unit", "category", "buyer", "buyer_phone", "buyer_cnic", "buyer_email", "floor", "area", "rate", "list_price", "discount_mode", "discount_value", "discount_amount", "price", "sale_date"],
+  leads: ["id", "name", "phone", "project_id", "source", "campaign_id", "agent_id", "status", "created_at", "email", "note", "assigned_at"],
+  sales: ["id", "project_id", "agent_id", "sold_by_manager_id", "lead_id", "unit", "category", "buyer", "buyer_phone", "buyer_cnic", "buyer_email", "floor", "area", "rate", "list_price", "discount_mode", "discount_value", "discount_amount", "price", "sale_date"],
   change_requests: ["id", "kind", "action", "project_id", "target_id", "target_name", "payload", "requested_by", "created_at", "status", "decision_note", "decided_at"],
   deployment_imports: ["id", "checksum", "imported_at"],
 };

@@ -38,6 +38,7 @@ const STORE: Role[] = ["superadmin", "warehouse"];
 const SALES: Role[] = ["superadmin", "sales"];
 const STORE_AND_SITE: Role[] = ["superadmin", "warehouse", "project-admin"];
 const PEOPLE_REQUESTERS: Role[] = ["superadmin", "project-admin", "sales"];
+const SALES_AND_AGENT: Role[] = ["superadmin", "sales", "agent"];
 const EVERYONE: Role[] = ["superadmin", "project-admin", "warehouse", "sales"];
 
 const forbidden = (message: string) => new AppError(message, 403);
@@ -225,6 +226,27 @@ export const operations: Record<string, Operation> = {
       return hrService.markAttendance(i);
     },
   },
+  // The Super Admin creates the sales manager; the sales manager creates and manages agents directly.
+  createSalesManager: { method: "POST", access: ADMIN, handler: (i) => salesService.addSalesManager(i) },
+  updateSalesManager: {
+    method: "POST",
+    access: ADMIN,
+    handler: (i) => salesService.updateSalesManager(z.object({ id: z.string().min(1) }).parse(i).id, i),
+  },
+  createAgent: { method: "POST", access: SALES, handler: (i) => salesService.addAgent(i) },
+  updateAgent: {
+    method: "POST",
+    access: SALES,
+    handler: (i) => salesService.updateAgent(z.object({ id: z.string().min(1) }).parse(i).id, i),
+  },
+  removeAgent: {
+    method: "POST",
+    access: SALES,
+    handler: async (i) => {
+      await salesService.removeAgent(z.object({ id: z.string().min(1) }).parse(i).id);
+      return { removed: true };
+    },
+  },
   addLead: { method: "POST", access: SALES, handler: (i) => salesService.addLead(i) },
   setLeadStatus: {
     method: "POST",
@@ -234,6 +256,44 @@ export const operations: Record<string, Operation> = {
       return salesService.setLeadStatus(data.id, data.status);
     },
   },
-  recordDirectSale: { method: "POST", access: ADMIN, handler: (i) => salesService.recordDirectSale(i) },
+  recordDirectSale: {
+    method: "POST",
+    access: SALES,
+    handler: (i, user) => {
+      // The sales manager's direct sale is theirs; the form says which manager they are.
+      if (user.role === "sales" && !i.managerId) throw forbidden("Choose the sales manager who is selling");
+      return salesService.recordDirectSale(i);
+    },
+  },
+  saveContactNote: {
+    method: "POST",
+    access: SALES_AND_AGENT,
+    handler: (i, user) => salesService.saveContactNote(i, user.role === "agent" ? (user.agentId ?? "") : undefined),
+  },
+  completeFollowUp: {
+    method: "POST",
+    access: SALES_AND_AGENT,
+    handler: (i, user) =>
+      salesService.completeFollowUp(z.object({ contactId: z.string().min(1) }).parse(i).contactId, user.role === "agent" ? (user.agentId ?? "") : undefined),
+  },
+  recordAgentSale: {
+    method: "POST",
+    access: SALES_AND_AGENT,
+    // An agent sells only as themselves: the agent in the request is checked against the signed-in agent.
+    handler: (i, user) => salesService.recordAgentSale(i, user.role === "agent" ? (user.agentId ?? "") : undefined),
+  },
+  logLeadContact: {
+    method: "POST",
+    access: SALES_AND_AGENT,
+    // An agent can only log contact on a lead forwarded to them.
+    handler: (i, user) => salesService.logContact(i, user.role === "agent" ? (user.agentId ?? "") : undefined),
+  },
+  saveMonthlyReport: {
+    method: "POST",
+    access: SALES,
+    handler: (i) => salesService.saveMonthlyReport(z.object({ period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) }).parse(i).period),
+  },
+  assignLead: { method: "POST", access: SALES, handler: (i) => salesService.assignLead(i) },
+  assignLeadsEqually: { method: "POST", access: SALES, handler: (i) => salesService.assignEqually(i) },
   recordSale: { method: "POST", access: SALES, handler: (i) => salesService.recordSale(i) },
 };

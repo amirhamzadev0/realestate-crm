@@ -73,6 +73,8 @@ export class AuthService {
         return "/warehouse";
       case "sales":
         return "/sales";
+      case "agent":
+        return user.agentId ? `/agent/${user.agentId}` : "/login";
       case "project-admin": {
         const project = user.projectId ? await this.projects.findById(user.projectId) : null;
         return project ? `/projects/${project.slug}` : "/login";
@@ -82,6 +84,7 @@ export class AuthService {
 
   /** A project admin without a real project could not reach any page, so they cannot sign in. */
   private async isUsable(user: AuthUser): Promise<boolean> {
+    if (user.role === "agent") return !!user.agentId;
     if (user.role !== "project-admin") return true;
     return !!user.projectId && !!(await this.projects.findById(user.projectId));
   }

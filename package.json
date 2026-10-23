@@ -10,7 +10,7 @@
     "build": "next build",
     "start": "next start --hostname 127.0.0.1 --port 3130",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/services.test.ts tests/auth.test.ts",
+    "test": "tsx --test tests/services.test.ts tests/auth.test.ts tests/format.test.ts tests/csv.test.ts",
     "format": "prettier --write \"src/**/*.ts\" \"src/**/*.tsx\" src/styles/globals.css \"tests/**/*.ts\"",
     "users:setup": "node scripts/setup-users.mjs",
     "db:prepare": "node scripts/setup-database.mjs",

@@ -64,4 +64,5 @@ export interface SaleProject {
   rates: ProjectRate[];
   hasUnitList: boolean; // a high-rise with its units listed sells those units
   availableUnits: ProjectUnit[]; // the listed units that are not sold yet
+  allUnits: (ProjectUnit & { sold: boolean })[]; // every listed unit; the sold ones are marked so they cannot be picked again
 }

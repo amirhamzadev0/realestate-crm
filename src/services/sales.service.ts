@@ -1,9 +1,24 @@
 import { z } from "zod";
 import { categoryLabels, plotCategories, rateFor, type Project, type ProjectUnit, type SaleProject } from "@/models/project";
-import type { Agent, Campaign, Lead, LeadStatus, Sale, SalesReport } from "@/models/sales";
+import type {
+  Agent,
+  AgentPerformance,
+  AgentReportRow,
+  Campaign,
+  Lead,
+  FollowUp,
+  LeadContact,
+  LeadContactSummary,
+  LeadStatus,
+  MonthlyReportSnapshot,
+  Sale,
+  SalesManager,
+  SalesReport,
+} from "@/models/sales";
 import type { AccountRepository, ProjectRepository, SalesRepository } from "@/repositories/contracts";
 import { AppError, notFound } from "@/utils/errors";
 import { newId, today } from "@/utils/id";
+import { addMonths } from "@/utils/date";
 import { discountProblem, priceUnit } from "@/utils/pricing";
 
 export const leadStatusSchema = z.enum(["new", "contacted", "site-visit", "negotiation", "won", "lost"]);
@@ -15,6 +30,25 @@ export const leadSchema = z.object({
   source: z.enum(["facebook", "instagram", "walk-in", "referral", "website"]),
   campaignId: z.string().nullable().default(null),
   agentId: z.string().nullable().default(null),
+  email: z.union([z.literal(""), z.string().trim().toLowerCase().email("Enter a valid email").max(254)]).default(""),
+  note: z.string().trim().max(500).default(""),
+});
+
+export const contactNoteSchema = z.object({
+  contactId: z.string().min(1),
+  comment: z.string().trim().max(1000).default(""),
+  // When the client asked to be contacted again: an ISO date and time, optional. Empty or null clears it.
+  followUpAt: z.union([z.iso.datetime(), z.literal(""), z.null()]).optional(),
+});
+
+export const logContactSchema = z.object({ leadId: z.string().min(1), channel: z.enum(["call", "whatsapp"]) });
+
+export const assignLeadSchema = z.object({ leadId: z.string().min(1), agentId: z.string().min(1).nullable() });
+
+/** Leave `leadIds` out to share every unassigned lead; leave `agentIds` out to share among every active agent. */
+export const assignEquallySchema = z.object({
+  leadIds: z.array(z.string().min(1)).optional(),
+  agentIds: z.array(z.string().min(1)).optional(),
 });
 
 const phoneSchema = z.string().trim().regex(/^[0-9+\-\s()]{7,20}$/, "Enter a valid phone number");
@@ -28,9 +62,10 @@ const cnicSchema = z
   .transform((v) => `${v.slice(0, 5)}-${v.slice(5, 12)}-${v.slice(12)}`);
 const optional = <T extends z.ZodType<string>>(schema: T) => z.union([z.literal(""), schema]).default("");
 
-export const saleSchema = z.object({
+const saleFields = {
   projectId: z.string().min(1),
-  agentId: z.string().min(1),
+  agentId: z.string().min(1).optional(), // an agent sold it (commission is owed), or...
+  managerId: z.string().min(1).optional(), // ...the sales manager sold it himself (no commission)
   leadId: z.string().nullable().default(null),
   category: z.enum(plotCategories),
   buyer: z.string().trim().max(120).default(""),
@@ -41,10 +76,15 @@ export const saleSchema = z.object({
   floor: z.string().trim().max(20).default(""),
   // A high-rise unit with a defined size ignores this: the size comes from the unit itself.
   area: z.number().positive().max(10_000_000).optional(),
-});
+};
 
-/** A sale the Super Admin makes without an agent: no agent, no lead, no commission. */
-export const directSaleSchema = saleSchema.omit({ agentId: true, leadId: true }).extend({
+/** A sale by an agent or by the sales manager: exactly one of them. */
+export const saleSchema = z
+  .object(saleFields)
+  .refine((sale) => !!sale.agentId !== !!sale.managerId, { message: "Choose who sold it: an agent or the sales manager", path: ["agentId"] });
+
+/** What a full sale carries: the buyer's details (all required) and, optionally, a discount. */
+const fullSaleFields = {
   // A discount is a fixed amount off the total, a lower rate per sq ft / marla, or a percentage off the total.
   discountMode: z.enum(["none", "amount", "rate", "percent"]).default("none"),
   discountValue: z.number().positive().max(Number.MAX_SAFE_INTEGER).optional(),
@@ -52,13 +92,33 @@ export const directSaleSchema = saleSchema.omit({ agentId: true, leadId: true })
   buyerPhone: phoneSchema,
   buyerCnic: cnicSchema,
   buyerEmail: emailSchema,
-});
+};
+
+/** A sale the Super Admin makes without an agent, or a sales manager makes himself (`managerId`): no lead, no commission. */
+export const directSaleSchema = z.object(saleFields).omit({ agentId: true, leadId: true }).extend(fullSaleFields);
+
+/** An agent sells a unit, the same way a direct sale is made, usually to one of the leads forwarded to them. Commission is owed to the agent. */
+export const agentSaleSchema = z
+  .object(saleFields)
+  .omit({ managerId: true })
+  .extend({ ...fullSaleFields, agentId: z.string().min(1) });
 
 export const agentSchema = z.object({
   name: z.string().trim().min(1).max(120),
   phone: z.string().trim().max(40).default(""),
   commissionRate: z.number().min(0).max(20),
+  managerId: z.string().min(1).nullable().optional(), // the sales manager who creates / owns this agent
 });
+
+export const salesManagerSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  phone: z.string().trim().max(40).default(""),
+  email: z.union([z.literal(""), z.string().trim().toLowerCase().email().max(254)]).default(""),
+});
+
+// Forms send "true" / "false" as text; the API may send a real boolean.
+const activeFlag = z.union([z.boolean(), z.enum(["true", "false"]).transform((v) => v === "true")]);
+export const salesManagerUpdateSchema = salesManagerSchema.extend({ active: activeFlag.default(true) });
 
 export const commissionFor = (price: number, ratePercent: number) => Math.round((price * ratePercent) / 100);
 
@@ -88,8 +148,79 @@ export class SalesService {
     );
   }
 
+  listSalesManagers(): Promise<SalesManager[]> {
+    return this.repo.listSalesManagers();
+  }
+
+  async getSalesManager(id: string): Promise<SalesManager> {
+    const manager = (await this.repo.listSalesManagers()).find((m) => m.id === id);
+    if (!manager) throw notFound("Sales manager");
+    return manager;
+  }
+
+  /** The Super Admin creates a sales manager for the sales department. */
+  async addSalesManager(input: unknown): Promise<SalesManager> {
+    return this.repo.saveSalesManager({ ...salesManagerSchema.parse(input), id: newId("sm"), active: true });
+  }
+
+  /** Edits a sales manager. One who has active agents cannot be made inactive until the agents are moved or removed. */
+  async updateSalesManager(id: string, input: unknown): Promise<SalesManager> {
+    const existing = await this.getSalesManager(id);
+    const data = salesManagerUpdateSchema.parse(input);
+    if (!data.active) {
+      const team = (await this.repo.listAgents()).filter((a) => a.managerId === id && a.active);
+      if (team.length) throw new AppError(`${existing.name} still has ${team.length} active agents. Move or remove them first.`, 409);
+    }
+    return this.repo.saveSalesManager({ ...existing, ...data });
+  }
+
+  /** The sales manager creates an agent; the agent is on that manager's team. */
   async addAgent(input: unknown): Promise<Agent> {
-    return this.repo.saveAgent({ ...agentSchema.parse(input), id: newId("ag"), active: true });
+    const data = agentSchema.parse(input);
+    if (data.managerId) {
+      const manager = await this.getSalesManager(data.managerId);
+      if (!manager.active) throw new AppError(`${manager.name} is inactive and cannot have new agents`, 409);
+    }
+    return this.repo.saveAgent({ ...data, managerId: data.managerId ?? null, id: newId("ag"), active: true });
+  }
+
+  /** What one agent sees in their own portal: their leads, their sales with commission and the totals. */
+  async agentPortal(agentId: string): Promise<{
+    agent: Agent;
+    manager: SalesManager | null;
+    stats: AgentPerformance & { conversionRate: number };
+    leads: (Lead & { contacts: LeadContactSummary; history: LeadContact[] })[];
+    sales: (Sale & { commission: number })[];
+  }> {
+    const agent = await this.getAgent(agentId);
+    const [leads, sales, managers, contacts, contactLog] = await Promise.all([
+      this.repo.listLeads(),
+      this.repo.listSales(),
+      this.repo.listSalesManagers(),
+      this.contactSummary(),
+      this.repo.listLeadContacts(),
+    ]);
+    const ownLeads = leads.filter((l) => l.agentId === agent.id);
+    const ownSales = sales.filter((s) => s.agentId === agent.id).map((s) => ({ ...s, commission: commissionFor(s.price, agent.commissionRate) }));
+    return {
+      agent,
+      manager: managers.find((m) => m.id === agent.managerId) ?? null,
+      stats: {
+        agentId: agent.id,
+        agentName: agent.name,
+        sales: ownSales.length,
+        revenue: ownSales.reduce((sum, s) => sum + s.price, 0),
+        commission: ownSales.reduce((sum, s) => sum + s.commission, 0),
+        leads: ownLeads.length,
+        conversionRate: ownLeads.length ? Math.round((ownLeads.filter((l) => l.status === "won").length / ownLeads.length) * 100) : 0,
+      },
+      leads: ownLeads.map((lead) => ({
+        ...lead,
+        contacts: contacts.get(lead.id) ?? { calls: 0, whatsapp: 0 },
+        history: contactLog.filter((c) => c.leadId === lead.id).sort((a, b) => b.at.localeCompare(a.at)),
+      })),
+      sales: ownSales,
+    };
   }
 
   async getAgent(id: string): Promise<Agent> {
@@ -112,7 +243,158 @@ export class SalesService {
   async addLead(input: unknown): Promise<Lead> {
     const data = leadSchema.parse(input);
     if (!(await this.projects.findById(data.projectId))) throw notFound("Project");
-    return this.repo.saveLead({ ...data, id: newId("l"), status: "new", createdAt: today() });
+    if (data.agentId) await this.activeAgent(data.agentId);
+    const { email, note, ...rest } = data;
+    return this.repo.saveLead({
+      ...rest,
+      ...(email ? { email } : {}),
+      ...(note ? { note } : {}),
+      id: newId("l"),
+      status: "new",
+      createdAt: today(),
+      ...(data.agentId ? { assignedAt: today() } : {}),
+    });
+  }
+
+  private async activeAgent(id: string): Promise<Agent> {
+    const agent = await this.getAgent(id);
+    if (!agent.active) throw new AppError(`${agent.name} is no longer an active agent`, 409);
+    return agent;
+  }
+
+  /**
+   * An agent starts a call or a WhatsApp message to a lead's client: it is counted, and a brand new lead becomes "contacted".
+   * `onlyAgentId` limits it to that agent's own leads (an agent cannot contact someone else's lead).
+   */
+  async logContact(input: unknown, onlyAgentId?: string): Promise<LeadContact> {
+    const data = logContactSchema.parse(input);
+    const lead = (await this.repo.listLeads()).find((l) => l.id === data.leadId);
+    if (!lead || (onlyAgentId && lead.agentId !== onlyAgentId)) throw notFound("Lead");
+    if (!lead.agentId) throw new AppError("Forward this lead to an agent before contacting the client", 409);
+    const contact = await this.repo.saveLeadContact({
+      id: newId("ct"),
+      leadId: lead.id,
+      agentId: lead.agentId,
+      channel: data.channel,
+      at: new Date().toISOString(),
+    });
+    if (lead.status === "new") await this.repo.setLeadStatus(lead.id, "contacted");
+    // Contacting the client again counts as following up on any earlier promise to do so.
+    for (const earlier of await this.repo.listLeadContacts()) {
+      if (earlier.leadId === lead.id && earlier.id !== contact.id && earlier.followUpAt && !earlier.followUpDone) {
+        await this.repo.saveLeadContact({ ...earlier, followUpDone: true });
+      }
+    }
+    return contact;
+  }
+
+  private async ownContact(contactId: string, onlyAgentId?: string): Promise<LeadContact> {
+    const contact = (await this.repo.listLeadContacts()).find((c) => c.id === contactId);
+    if (!contact || (onlyAgentId && contact.agentId !== onlyAgentId)) throw notFound("Contact");
+    return contact;
+  }
+
+  /**
+   * The agent writes what was said on a call or message, and, if the client asked to be contacted again, when.
+   * The follow-up time must be in the future. Saving again replaces the earlier note.
+   */
+  async saveContactNote(input: unknown, onlyAgentId?: string): Promise<LeadContact> {
+    const data = contactNoteSchema.parse(input);
+    const contact = await this.ownContact(data.contactId, onlyAgentId);
+    const { followUpAt: _at, followUpDone: _done, comment: _comment, ...rest } = contact;
+    const when = data.followUpAt || undefined;
+    if (when && new Date(when).getTime() <= Date.now()) throw new AppError("Choose a follow-up time that is still to come", 400);
+    return this.repo.saveLeadContact({
+      ...rest,
+      ...(data.comment ? { comment: data.comment } : {}),
+      ...(when ? { followUpAt: when, followUpDone: false } : {}),
+    });
+  }
+
+  /** The agent says a follow-up is finished (or no longer needed), so it stops showing as due. */
+  async completeFollowUp(contactId: string, onlyAgentId?: string): Promise<LeadContact> {
+    const contact = await this.ownContact(contactId, onlyAgentId);
+    if (!contact.followUpAt) throw new AppError("This contact has no follow-up", 409);
+    return this.repo.saveLeadContact({ ...contact, followUpDone: true });
+  }
+
+  /** An agent's open follow-ups, the nearest first. The ones whose time has come (or passed) are first of all. */
+  async followUps(agentId: string): Promise<FollowUp[]> {
+    const [contacts, leads] = await Promise.all([this.repo.listLeadContacts(), this.repo.listLeads()]);
+    const byLead = new Map(leads.map((l) => [l.id, l]));
+    return contacts
+      .filter((c) => c.agentId === agentId && c.followUpAt && !c.followUpDone && byLead.get(c.leadId)?.status !== "won")
+      .map((c): FollowUp => {
+        const lead = byLead.get(c.leadId)!;
+        return {
+          contactId: c.id,
+          leadId: lead.id,
+          leadName: lead.name,
+          leadPhone: lead.phone,
+          projectId: lead.projectId,
+          at: c.followUpAt as string,
+          comment: c.comment ?? "",
+          channel: c.channel,
+        };
+      })
+      .sort((a, b) => a.at.localeCompare(b.at));
+  }
+
+  /** Calls and WhatsApp messages per lead, with the time of the last one. */
+  async contactSummary(): Promise<Map<string, LeadContactSummary>> {
+    const summary = new Map<string, LeadContactSummary>();
+    for (const contact of await this.repo.listLeadContacts()) {
+      const entry = summary.get(contact.leadId) ?? { calls: 0, whatsapp: 0 };
+      if (contact.channel === "call") entry.calls += 1;
+      else entry.whatsapp += 1;
+      if (!entry.lastAt || contact.at > entry.lastAt) {
+        entry.lastAt = contact.at;
+        if (contact.comment) entry.lastComment = contact.comment;
+      }
+      if (contact.followUpAt && !contact.followUpDone && (!entry.nextFollowUpAt || contact.followUpAt < entry.nextFollowUpAt)) {
+        entry.nextFollowUpAt = contact.followUpAt;
+      }
+      summary.set(contact.leadId, entry);
+    }
+    return summary;
+  }
+
+  /** The sales manager forwards one lead to an agent (or takes it back with `agentId: null`). The agent sees it in their portal. */
+  async assignLead(input: unknown): Promise<Lead> {
+    const data = assignLeadSchema.parse(input);
+    const lead = (await this.repo.listLeads()).find((l) => l.id === data.leadId);
+    if (!lead) throw notFound("Lead");
+    if (data.agentId) await this.activeAgent(data.agentId);
+    const { assignedAt: _old, ...rest } = lead;
+    return this.repo.saveLead({ ...rest, agentId: data.agentId, ...(data.agentId ? { assignedAt: today() } : {}) });
+  }
+
+  /**
+   * Shares leads among agents one after the other so everyone gets the same number (or one more or less).
+   * By default: every unassigned lead, among every active agent.
+   */
+  async assignEqually(input: unknown): Promise<{ assigned: number; perAgent: { agentId: string; agentName: string; count: number }[] }> {
+    const data = assignEquallySchema.parse(input);
+    const [leads, allAgents] = await Promise.all([this.repo.listLeads(), this.repo.listAgents()]);
+    const agents = allAgents
+      .filter((a) => a.active && (!data.agentIds || data.agentIds.includes(a.id)))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (agents.length === 0) throw new AppError("There is no active agent to give leads to", 409);
+    const toShare = leads
+      .filter((l) => (data.leadIds ? data.leadIds.includes(l.id) : l.agentId === null))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    if (toShare.length === 0) throw new AppError("There are no leads to share", 409);
+
+    const counts = new Map(agents.map((a) => [a.id, 0]));
+    for (const [index, lead] of toShare.entries()) {
+      const agent = agents[index % agents.length];
+      counts.set(agent.id, (counts.get(agent.id) ?? 0) + 1);
+      await this.repo.saveLead({ ...lead, agentId: agent.id, assignedAt: today() });
+    }
+    return {
+      assigned: toShare.length,
+      perAgent: agents.map((a) => ({ agentId: a.id, agentName: a.name, count: counts.get(a.id) ?? 0 })),
+    };
   }
 
   async setLeadStatus(id: string, status: unknown): Promise<Lead> {
@@ -124,13 +406,172 @@ export class SalesService {
   /** Records an agent's sale and marks the originating lead as won. */
   async recordSale(input: unknown): Promise<Sale> {
     const data = saleSchema.parse(input);
-    if (!(await this.repo.listAgents()).some((a) => a.id === data.agentId)) throw notFound("Agent");
-    return this.sell(data, data.agentId, data.leadId);
+    if (data.agentId) {
+      const agent = (await this.repo.listAgents()).find((a) => a.id === data.agentId);
+      if (!agent) throw notFound("Agent");
+      if (!agent.active) throw new AppError(`${agent.name} is no longer an active agent`, 409);
+    }
+    if (data.managerId) {
+      const manager = (await this.repo.listSalesManagers()).find((m) => m.id === data.managerId);
+      if (!manager) throw notFound("Sales manager");
+      if (!manager.active) throw new AppError(`${manager.name} is inactive`, 409);
+    }
+    return this.sell(data, data.agentId ?? null, data.leadId, data.managerId ?? null);
   }
 
-  /** The Super Admin sells a unit straight to a buyer. */
+  /** A direct sale: the Super Admin, or a sales manager (`managerId`), sells a unit straight to a buyer, with a discount if they give one. */
   async recordDirectSale(input: unknown): Promise<Sale> {
-    return this.sell(directSaleSchema.parse(input), null, null);
+    const data = directSaleSchema.parse(input);
+    if (data.managerId) {
+      const manager = (await this.repo.listSalesManagers()).find((m) => m.id === data.managerId);
+      if (!manager) throw notFound("Sales manager");
+      if (!manager.active) throw new AppError(`${manager.name} is inactive`, 409);
+    }
+    return this.sell(data, null, null, data.managerId ?? null);
+  }
+
+  /**
+   * An agent sells a unit. It works like a direct sale (all the buyer's details, a discount if given) and, when it is for one
+   * of their leads, that lead becomes "won". `onlyAgentId` limits it to that agent (an agent cannot sell as someone else).
+   */
+  async recordAgentSale(input: unknown, onlyAgentId?: string): Promise<Sale> {
+    const data = agentSaleSchema.parse(input);
+    if (onlyAgentId && data.agentId !== onlyAgentId) throw new AppError("You can only sell your own leads", 403);
+    const agent = await this.activeAgent(data.agentId);
+    // The sale may be tied to one of the agent's leads (which then becomes "won"), or be a client who is not in the list.
+    const lead = data.leadId ? (await this.repo.listLeads()).find((l) => l.id === data.leadId) : undefined;
+    if (data.leadId) {
+      if (!lead) throw notFound("Lead");
+      if (lead.agentId !== agent.id) throw new AppError("This lead is not forwarded to this agent", 409);
+      if (lead.status === "won") throw new AppError("This lead is already sold", 409);
+    }
+    return this.sell(data, agent.id, lead?.id ?? null, null);
+  }
+
+  /**
+   * What each agent did in a period (or ever, without one): leads forwarded, calls and WhatsApp messages, units sold, what the
+   * buyers paid and the commission. Sales by the sales manager himself and direct sales are listed too, so the rows add up
+   * to everything that was sold.
+   */
+  async agentReport(range?: { from: string; to: string }): Promise<AgentReportRow[]> {
+    const [agents, managers, leads, sales, contacts] = await Promise.all([
+      this.repo.listAgents(),
+      this.repo.listSalesManagers(),
+      this.repo.listLeads(),
+      this.repo.listSales(),
+      this.repo.listLeadContacts(),
+    ]);
+    const within = (date: string) => !range || (date >= range.from && date <= range.to);
+    const periodSales = sales.filter((s) => within(s.date));
+
+    const rows: AgentReportRow[] = agents
+      .map((agent): AgentReportRow => {
+        const own = periodSales.filter((s) => s.agentId === agent.id);
+        const revenue = own.reduce((sum, s) => sum + s.price, 0);
+        const mine = contacts.filter((c) => c.agentId === agent.id && within(c.at.slice(0, 10)));
+        return {
+          key: agent.id,
+          kind: "agent",
+          name: agent.name,
+          leads: leads.filter((l) => l.agentId === agent.id && within(l.assignedAt ?? l.createdAt)).length,
+          calls: mine.filter((c) => c.channel === "call").length,
+          whatsapp: mine.filter((c) => c.channel === "whatsapp").length,
+          units: own.length,
+          revenue,
+          commission: commissionFor(revenue, agent.commissionRate),
+        };
+      })
+      // An agent who was removed stays in a report only while they have something in it.
+      .filter((row) => agents.find((a) => a.id === row.key)?.active || row.units + row.leads + row.calls + row.whatsapp > 0);
+
+    for (const manager of managers) {
+      const own = periodSales.filter((s) => s.soldByManagerId === manager.id);
+      if (manager.active || own.length) {
+        rows.push({ key: manager.id, kind: "manager", name: `${manager.name} (sales manager)`, leads: 0, calls: 0, whatsapp: 0, units: own.length, revenue: own.reduce((sum, s) => sum + s.price, 0), commission: 0 });
+      }
+    }
+    const direct = periodSales.filter((s) => !s.agentId && !s.soldByManagerId);
+    if (direct.length) {
+      rows.push({ key: "direct", kind: "direct", name: "Direct sales (Super Admin)", leads: 0, calls: 0, whatsapp: 0, units: direct.length, revenue: direct.reduce((sum, s) => sum + s.price, 0), commission: 0 });
+    }
+    return rows;
+  }
+
+  /** The report of one month, worked out from the sales, calls and leads of that month. */
+  async monthlyReport(period: string): Promise<AgentReportRow[]> {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) throw new AppError("The month must look like 2026-10", 400);
+    return this.agentReport({ from: `${period}-01`, to: `${period}-31` });
+  }
+
+  /** One agent's month in detail: the summary, the sales they made, and the leads forwarded to them. */
+  async agentMonthDetail(
+    agentId: string,
+    period: string,
+  ): Promise<{
+    agent: Agent;
+    period: string;
+    row: AgentReportRow;
+    sales: (Sale & { commission: number })[];
+    leads: (Lead & { contacts: { calls: number; whatsapp: number } })[];
+  }> {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) throw new AppError("The month must look like 2026-10", 400);
+    const agent = await this.getAgent(agentId);
+    const range = { from: `${period}-01`, to: `${period}-31` };
+    const [rows, sales, leads, contacts] = await Promise.all([
+      this.agentReport(range),
+      this.repo.listSales(),
+      this.repo.listLeads(),
+      this.repo.listLeadContacts(),
+    ]);
+    const inMonth = (date: string) => date >= range.from && date <= range.to;
+    return {
+      agent,
+      period,
+      row:
+        rows.find((r) => r.key === agent.id) ??
+        { key: agent.id, kind: "agent", name: agent.name, leads: 0, calls: 0, whatsapp: 0, units: 0, revenue: 0, commission: 0 },
+      sales: sales
+        .filter((s) => s.agentId === agent.id && inMonth(s.date))
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map((s) => ({ ...s, commission: commissionFor(s.price, agent.commissionRate) })),
+      leads: leads
+        .filter((l) => l.agentId === agent.id && inMonth(l.assignedAt ?? l.createdAt))
+        .map((lead) => {
+          const mine = contacts.filter((c) => c.leadId === lead.id && inMonth(c.at.slice(0, 10)));
+          return { ...lead, contacts: { calls: mine.filter((c) => c.channel === "call").length, whatsapp: mine.filter((c) => c.channel === "whatsapp").length } };
+        }),
+    };
+  }
+
+  /**
+   * Saves a month's report. The current month can be saved "so far" at any time; a month that has ended is saved as final.
+   * Saving again replaces the earlier save of the same month.
+   */
+  async saveMonthlyReport(period: string): Promise<MonthlyReportSnapshot> {
+    const rows = await this.monthlyReport(period);
+    return this.repo.saveMonthlyReport({ period, final: period < today().slice(0, 7), generatedAt: new Date().toISOString(), rows });
+  }
+
+  /**
+   * Makes sure every month that is over has its report saved (from the first month that has any activity), and returns all
+   * saved reports, newest first. Months already saved as final are left exactly as they were saved.
+   */
+  async savedMonthlyReports(): Promise<MonthlyReportSnapshot[]> {
+    const [sales, leads, contacts, saved] = await Promise.all([
+      this.repo.listSales(),
+      this.repo.listLeads(),
+      this.repo.listLeadContacts(),
+      this.repo.listMonthlyReports(),
+    ]);
+    const dates = [...sales.map((s) => s.date), ...leads.map((l) => l.assignedAt ?? l.createdAt), ...contacts.map((c) => c.at.slice(0, 10))];
+    const current = today().slice(0, 7);
+    if (dates.length) {
+      const first = dates.sort()[0].slice(0, 7);
+      for (let period = first; period < current; period = addMonths(`${period}-01`, 1).slice(0, 7)) {
+        if (!saved.some((r) => r.period === period && r.final)) await this.saveMonthlyReport(period);
+      }
+    }
+    return this.repo.listMonthlyReports();
   }
 
   /** How many units of each project have been sold. */
@@ -172,6 +613,7 @@ export class SalesService {
       rates: p.rates,
       hasUnitList: p.type === "high-rise" && p.units.length > 0,
       availableUnits: free.get(p.id) ?? [],
+      allUnits: p.units.map((u) => ({ ...u, sold: !(free.get(p.id) ?? []).some((f) => f.unit === u.unit) })),
     }));
   }
 
@@ -181,9 +623,10 @@ export class SalesService {
    * category (and the size of the unit), never from the browser.
    */
   private async sell(
-    data: z.output<typeof saleSchema> | z.output<typeof directSaleSchema>,
+    data: z.output<typeof saleSchema> | z.output<typeof directSaleSchema> | z.output<typeof agentSaleSchema>,
     agentId: string | null,
     leadId: string | null,
+    managerId: string | null,
   ): Promise<Sale> {
     const project = await this.projects.findById(data.projectId);
     if (!project) throw notFound("Project");
@@ -239,6 +682,7 @@ export class SalesService {
       id: newId("sl"),
       projectId: project.id,
       agentId,
+      ...(managerId ? { soldByManagerId: managerId } : {}),
       leadId,
       category: data.category,
       unit: unitName,

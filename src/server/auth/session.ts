@@ -10,7 +10,7 @@ import { authService } from "@/server/container";
 import { SESSION_COOKIE } from "@/services/auth.service";
 
 /** Stands in for the signed-in person while AUTH_ENABLED is off. The Super Admin may open every portal. */
-const OPEN_ACCESS_USER: AuthUser = { id: "open-access", email: "", name: "Demo user", role: "superadmin", projectId: null };
+const OPEN_ACCESS_USER: AuthUser = { id: "open-access", email: "", name: "Demo user", role: "superadmin", projectId: null, agentId: null };
 
 export const getSessionToken = async () => (await cookies()).get(SESSION_COOKIE)?.value;
 

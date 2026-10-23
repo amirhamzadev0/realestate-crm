@@ -5,6 +5,7 @@ const portalAccess: { prefix: string; roles: Role[] }[] = [
   { prefix: "/superadmin", roles: ["superadmin"] },
   { prefix: "/warehouse", roles: ["superadmin", "warehouse"] },
   { prefix: "/sales", roles: ["superadmin", "sales"] },
+  { prefix: "/agent", roles: ["superadmin", "sales", "agent"] },
   { prefix: "/projects", roles: ["superadmin", "project-admin"] },
 ];
 
@@ -22,5 +23,6 @@ export const roleLabels: Record<Role, string> = {
   superadmin: "Super Admin",
   "project-admin": "Project Admin",
   warehouse: "Orders desk",
-  sales: "Sales",
+  sales: "Sales Manager",
+  agent: "Agent",
 };

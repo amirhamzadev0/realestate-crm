@@ -1,5 +1,6 @@
 import {
   BadgeDollarSign,
+  BellRing,
   Boxes,
   Building2,
   ChartNoAxesColumn,
@@ -20,6 +21,7 @@ import {
 
 const icons: Record<string, LucideIcon> = {
   BadgeDollarSign,
+  BellRing,
   Boxes,
   Building2,
   ChartNoAxesColumn,

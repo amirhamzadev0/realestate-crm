@@ -54,9 +54,13 @@ commission stay in the reports. Removing a worker also deletes their tasks and a
 
 ### Sales workflow
 
-Lead (campaign / walk-in / referral) → assigned to agent → stages `new → contacted → site-visit →
-negotiation → won | lost`. `recordSale` stores the sale and marks the lead `won`.
-Commission = `price × agent.commissionRate / 100`.
+The sales department has two roles. The **Super Admin creates the sales manager** (Sales team page). The **sales manager creates
+agents directly** (no approval), can **record sales himself** (credited to the project, no commission) and sees the whole department.
+Each **agent has their own portal** (`/agent/<id>`) showing only their leads, their sales and their commission (read only).
+
+Lead (campaign / walk-in / referral) -> assigned to agent -> stages `new -> contacted -> site-visit -> negotiation -> won | lost`.
+`recordSale` stores the sale (by an agent, or by the sales manager) and marks the lead `won`. Commission = `price x agent.commissionRate / 100`.
+Sign-in for managers and agents is linked when `AUTH_ENABLED=true` (an agent account has `agentId`).
 
 ### Pay rules (HR)
 

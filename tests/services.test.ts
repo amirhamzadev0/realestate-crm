@@ -402,6 +402,389 @@ describe("sales", () => {
     await assert.rejects(sales.recordSale({ category: "general", projectId: "p3", agentId: "ag1", unit: "Another plot", area: 1 }), /are sold|no units left/);
   });
 
+  it("the Super Admin creates a sales manager, and the manager creates agents on their team", async () => {
+    const manager = await sales.addSalesManager({ name: "Kamran Butt", phone: "0300-1112223", email: "Kamran@Example.com" });
+    assert.equal(manager.active, true);
+    assert.equal(manager.email, "kamran@example.com");
+    const agent = await sales.addAgent({ name: "New Agent", phone: "0300-0000000", commissionRate: 2, managerId: manager.id });
+    assert.equal(agent.managerId, manager.id);
+    assert.equal((await sales.listAgents()).find((a) => a.id === agent.id)?.active, true);
+    await assert.rejects(sales.addAgent({ name: "Ghost", commissionRate: 2, managerId: "nope" }), /Sales manager not found/);
+    await assert.rejects(sales.addSalesManager({ name: "" }), ZodError);
+
+    // a manager with active agents cannot be made inactive until the team is moved or removed
+    await assert.rejects(sales.updateSalesManager(manager.id, { name: manager.name, active: "false" }), /still has 1 active agents/);
+    await sales.removeAgent(agent.id);
+    assert.equal((await sales.updateSalesManager(manager.id, { name: "Kamran B.", active: "false" })).active, false);
+    await assert.rejects(sales.addAgent({ name: "Late", commissionRate: 2, managerId: manager.id }), /inactive/);
+  });
+
+  it("the sales manager can sell himself: credited to the project, no commission", async () => {
+    const before = (await accounts.summary("p3")).sales;
+    const sale = await sales.recordSale({ category: "general", projectId: "p3", managerId: "sm1", unit: "Plot 80", area: 2 });
+    assert.equal(sale.agentId, null);
+    assert.equal(sale.soldByManagerId, "sm1");
+    assert.equal((await accounts.summary("p3")).sales, before + sale.price);
+    const report = await sales.report();
+    assert.equal(report.totalSales, report.agents.reduce((n, a) => n + a.sales, 0) + 1); // counted, but on no agent
+    await assert.rejects(sales.recordSale({ category: "general", projectId: "p3", unit: "Plot 81", area: 2 }), /Choose who sold it/);
+    await assert.rejects(sales.recordSale({ category: "general", projectId: "p3", agentId: "ag1", managerId: "sm1", unit: "Plot 81", area: 2 }), /Choose who sold it/);
+    await assert.rejects(sales.recordSale({ category: "general", projectId: "p3", managerId: "nope", unit: "Plot 81", area: 2 }), /Sales manager not found/);
+  });
+
+  it("an agent portal shows only that agent's leads and sales, with their commission", async () => {
+    const portal = await sales.agentPortal("ag1");
+    assert.equal(portal.agent.name, "Hassan Ali");
+    assert.equal(portal.manager?.id, "sm1");
+    assert.equal(portal.leads.every((l) => l.agentId === "ag1"), true);
+    assert.equal(portal.sales.every((s) => s.agentId === "ag1"), true);
+    assert.equal(portal.stats.sales, portal.sales.length);
+    assert.equal(portal.stats.commission, portal.sales.reduce((sum, s) => sum + Math.round((s.price * 2) / 100), 0));
+    await assert.rejects(sales.agentPortal("nope"), /Agent not found/);
+    // a sale by someone else does not appear
+    const before = (await sales.agentPortal("ag2")).sales.length;
+    await sales.recordSale({ category: "general", projectId: "p3", agentId: "ag1", unit: "Plot 90", area: 1 });
+    assert.equal((await sales.agentPortal("ag2")).sales.length, before);
+    assert.equal((await sales.agentPortal("ag1")).sales.length, portal.sales.length + 1);
+  });
+
+  it("keeps the client's email and note on a lead, and forwards it to an agent", async () => {
+    const lead = await sales.addLead({ name: "Client One", phone: "0300-1234567", email: "Client@Example.com", note: "Wants a 5 marla plot", projectId: "p3", source: "walk-in" });
+    assert.equal(lead.email, "client@example.com");
+    assert.equal(lead.note, "Wants a 5 marla plot");
+    assert.equal(lead.agentId, null);
+    assert.equal(lead.assignedAt, undefined);
+
+    const forwarded = await sales.assignLead({ leadId: lead.id, agentId: "ag2" });
+    assert.equal(forwarded.agentId, "ag2");
+    assert.equal(forwarded.assignedAt, today());
+    assert.equal((await sales.agentPortal("ag2")).leads.some((l) => l.id === lead.id), true); // the agent sees it
+    assert.equal((await sales.agentPortal("ag1")).leads.some((l) => l.id === lead.id), false);
+
+    const back = await sales.assignLead({ leadId: lead.id, agentId: null });
+    assert.equal(back.agentId, null);
+    assert.equal(back.assignedAt, undefined);
+    await assert.rejects(sales.assignLead({ leadId: "nope", agentId: "ag1" }), /Lead not found/);
+    await assert.rejects(sales.assignLead({ leadId: lead.id, agentId: "nope" }), /Agent not found/);
+    await sales.removeAgent("ag3");
+    await assert.rejects(sales.assignLead({ leadId: lead.id, agentId: "ag3" }), /no longer an active agent/);
+    await assert.rejects(sales.addLead({ name: "X", phone: "0300-1234567", projectId: "p3", source: "walk-in", email: "bad" }), ZodError);
+  });
+
+  it("divides the unassigned leads equally among the active agents", async () => {
+    const before = await sales.listLeads();
+    for (const lead of before.filter((l) => l.agentId === null)) await sales.assignLead({ leadId: lead.id, agentId: "ag1" }); // start with none unassigned
+    const made = [];
+    for (let i = 0; i < 7; i++) made.push(await sales.addLead({ name: `Lead ${i}`, phone: "0300-1234567", projectId: "p3", source: "facebook" }));
+
+    const load = async () => Object.fromEntries((await sales.listAgents()).map((a) => [a.id, 0]));
+    const result = await sales.assignEqually({});
+    assert.equal(result.assigned, 7);
+    assert.equal(result.perAgent.reduce((n, a) => n + a.count, 0), 7);
+    const counts = result.perAgent.map((a) => a.count);
+    assert.ok(Math.max(...counts) - Math.min(...counts) <= 1, `uneven split ${counts}`); // 3, 2, 2
+    for (const lead of made) assert.notEqual((await sales.listLeads()).find((l) => l.id === lead.id)!.agentId, null);
+    void load;
+    await assert.rejects(sales.assignEqually({}), /no leads to share/);
+
+    // a chosen group of leads among chosen agents only
+    const more = [await sales.addLead({ name: "A", phone: "0300-1234567", projectId: "p3", source: "facebook" }), await sales.addLead({ name: "B", phone: "0300-1234567", projectId: "p3", source: "facebook" })];
+    const some = await sales.assignEqually({ leadIds: more.map((l) => l.id), agentIds: ["ag1", "ag2"] });
+    assert.deepEqual(some.perAgent.map((a) => a.count), [1, 1]);
+    await assert.rejects(sales.assignEqually({ leadIds: more.map((l) => l.id), agentIds: ["nope"] }), /no active agent/);
+  });
+
+  it("a sales manager can make a direct sale too, with a discount, under their own name", async () => {
+    const sale = await sales.recordDirectSale({
+      category: "general", projectId: "p3", managerId: "sm1", unit: "Plot M-1", area: 10,
+      buyer: "Mr Asif", buyerPhone: "0300-1234567", buyerCnic: "35202-1234567-1", buyerEmail: "asif@example.com",
+      discountMode: "percent", discountValue: 10,
+    });
+    assert.equal(sale.soldByManagerId, "sm1");
+    assert.equal(sale.agentId, null);
+    assert.equal(sale.price, 22_500_000);
+    assert.equal(sale.buyerCnic, "35202-1234567-1");
+    await assert.rejects(
+      sales.recordDirectSale({ category: "general", projectId: "p3", managerId: "nope", unit: "Plot M-2", area: 1, buyer: "B", buyerPhone: "0300-1234567", buyerCnic: "35202-1234567-1", buyerEmail: "b@example.com" }),
+      /Sales manager not found/,
+    );
+  });
+
+  it("counts every call and WhatsApp message an agent starts to a lead's client", async () => {
+    const lead = await sales.addLead({ name: "Client Two", phone: "0333-9999999", projectId: "p3", source: "facebook", agentId: "ag1" });
+    assert.equal(lead.status, "new");
+    const counts = async () => (await sales.agentPortal("ag1")).leads.find((l) => l.id === lead.id)!.contacts;
+    assert.deepEqual(await counts(), { calls: 0, whatsapp: 0 });
+
+    await sales.logContact({ leadId: lead.id, channel: "whatsapp" }, "ag1");
+    assert.equal((await sales.listLeads()).find((l) => l.id === lead.id)!.status, "contacted"); // the first contact moves it on
+    await sales.logContact({ leadId: lead.id, channel: "call" }, "ag1");
+    await sales.logContact({ leadId: lead.id, channel: "call" }, "ag1");
+    const now = await counts();
+    assert.equal(now.calls, 2);
+    assert.equal(now.whatsapp, 1);
+    assert.ok(now.lastAt && now.lastAt.startsWith(today()));
+    assert.equal((await sales.contactSummary()).get(lead.id)?.calls, 2); // the manager sees the same numbers
+
+    // later stages are not pulled back to "contacted"
+    await sales.setLeadStatus(lead.id, "negotiation");
+    await sales.logContact({ leadId: lead.id, channel: "call" }, "ag1");
+    assert.equal((await sales.listLeads()).find((l) => l.id === lead.id)!.status, "negotiation");
+  });
+
+  it("an agent cannot contact a lead that is not theirs, and an unforwarded lead has no one to contact it", async () => {
+    const lead = await sales.addLead({ name: "Client Three", phone: "0333-8888888", projectId: "p3", source: "facebook", agentId: "ag1" });
+    await assert.rejects(sales.logContact({ leadId: lead.id, channel: "call" }, "ag2"), /Lead not found/);
+    await sales.logContact({ leadId: lead.id, channel: "call" }); // manager / Super Admin: no restriction
+    const loose = await sales.addLead({ name: "Client Four", phone: "0333-7777777", projectId: "p3", source: "facebook" });
+    await assert.rejects(sales.logContact({ leadId: loose.id, channel: "call" }), /Forward this lead to an agent/);
+    await assert.rejects(sales.logContact({ leadId: "nope", channel: "call" }), /Lead not found/);
+    await assert.rejects(sales.logContact({ leadId: lead.id, channel: "sms" }), ZodError);
+  });
+
+  it("an agent sells one of their leads like a direct sale: buyer details, discount, commission, lead won", async () => {
+    const lead = await sales.addLead({ name: "Client Five", phone: "0333-6666666", email: "five@example.com", projectId: "p3", source: "walk-in", agentId: "ag1" });
+    const buyer = { buyer: "Client Five", buyerPhone: "0333-6666666", buyerCnic: "3520212345671", buyerEmail: "five@example.com" };
+    const before = (await accounts.summary("p3")).sales;
+    const sale = await sales.recordAgentSale(
+      { agentId: "ag1", leadId: lead.id, projectId: "p3", category: "general", unit: "Plot A-1", area: 10, discountMode: "percent", discountValue: 10, ...buyer },
+      "ag1",
+    );
+    assert.equal(sale.agentId, "ag1");
+    assert.equal(sale.leadId, lead.id);
+    assert.equal(sale.price, 22_500_000); // 10 marla x 2,500,000 less 10%
+    assert.equal(sale.discountAmount, 2_500_000);
+    assert.equal(sale.buyerCnic, "35202-1234567-1");
+    assert.equal((await sales.listLeads()).find((l) => l.id === lead.id)!.status, "won");
+    assert.equal((await accounts.summary("p3")).sales, before + 22_500_000); // credited to the project
+
+    const portal = await sales.agentPortal("ag1");
+    const mine = portal.sales.find((s) => s.id === sale.id)!;
+    assert.equal(mine.commission, Math.round((22_500_000 * 2) / 100)); // commission on what the buyer paid
+    await assert.rejects(
+      sales.recordAgentSale({ agentId: "ag1", leadId: lead.id, projectId: "p3", category: "general", unit: "Plot A-2", area: 1, ...buyer }, "ag1"),
+      /already sold/,
+    );
+  });
+
+  it("an agent can also sell to a client who is not in their leads", async () => {
+    const buyer = { buyer: "Walk In", buyerPhone: "0333-3333333", buyerCnic: "3520212345671", buyerEmail: "walk@example.com" };
+    const sale = await sales.recordAgentSale({ agentId: "ag2", projectId: "p3", category: "general", unit: "Plot W-1", area: 2, ...buyer }, "ag2");
+    assert.equal(sale.agentId, "ag2");
+    assert.equal(sale.leadId, null);
+    assert.equal(sale.price, 5_000_000);
+    assert.equal((await sales.agentPortal("ag2")).sales.some((s) => s.id === sale.id), true); // counted for the agent, with commission
+  });
+
+  it("an agent can only sell their own lead, as themselves, with the full buyer details", async () => {
+    const lead = await sales.addLead({ name: "Client Six", phone: "0333-5555555", projectId: "p3", source: "walk-in", agentId: "ag1" });
+    const buyer = { buyer: "Client Six", buyerPhone: "0333-5555555", buyerCnic: "3520212345671", buyerEmail: "six@example.com" };
+    const sell = (extra: object, who?: string) =>
+      sales.recordAgentSale({ agentId: "ag1", leadId: lead.id, projectId: "p3", category: "general", unit: "Plot B-1", area: 1, ...buyer, ...extra }, who);
+
+    await assert.rejects(sell({}, "ag2"), /only sell your own leads/); // another agent signed in
+    await assert.rejects(sell({ agentId: "ag2" }), /not forwarded to this agent/); // the lead belongs to ag1
+    await assert.rejects(sell({ leadId: "nope" }), /Lead not found/);
+    await assert.rejects(sell({ buyerCnic: "123" }), ZodError);
+    await assert.rejects(sell({ buyerEmail: "" }), ZodError);
+    await assert.rejects(sell({ discountMode: "percent", discountValue: 100 }), /below 100/);
+    assert.equal((await sales.listLeads()).find((l) => l.id === lead.id)!.status, "new"); // nothing happened to the lead
+    assert.equal((await sell({}, "ag1")).agentId, "ag1");
+
+    const loose = await sales.addLead({ name: "Client Seven", phone: "0333-4444444", projectId: "p3", source: "walk-in" });
+    await assert.rejects(
+      sales.recordAgentSale({ agentId: "ag1", leadId: loose.id, projectId: "p3", category: "general", unit: "Plot B-2", area: 1, ...buyer }),
+      /not forwarded to this agent/,
+    );
+  });
+
+  it("marks a sold unit as sold for the sale form, and it cannot be sold again", async () => {
+    const project = (await projects.findById("p1"))!;
+    const view = async () => (await sales.saleProjects([(await projects.findById("p1"))!]))[0];
+    const before = await view();
+    assert.equal(before.allUnits.find((u) => u.unit === "5-03")!.sold, false);
+    const freeBefore = before.availableUnits.length;
+
+    const sale = await sales.recordSale({ category: "residential", projectId: "p1", agentId: "ag1", unit: "5-03" });
+    const after = await view();
+    assert.equal(after.allUnits.find((u) => u.unit === "5-03")!.sold, true); // marked sold
+    assert.equal(after.allUnits.length, project.units.length); // still listed, not removed
+    assert.equal(after.availableUnits.length, freeBefore - 1);
+    assert.equal(after.availableUnits.some((u) => u.unit === "5-03"), false);
+
+    await assert.rejects(sales.recordSale({ category: "residential", projectId: "p1", agentId: "ag2", unit: "5-03" }), /already sold/);
+    await assert.rejects(sales.recordDirectSale({ category: "residential", projectId: "p1", unit: "5-03", buyer: "B", buyerPhone: "0300-1234567", buyerCnic: "35202-1234567-1", buyerEmail: "b@example.com" }), /already sold/);
+    assert.ok(sale.price > 0);
+  });
+
+  it("the overall agent report counts units, value and commission, and adds up to every sale", async () => {
+    await sales.recordSale({ category: "general", projectId: "p3", managerId: "sm1", unit: "Plot R-1", area: 1 });
+    await sales.recordDirectSale({ category: "general", projectId: "p3", unit: "Plot R-2", area: 1, buyer: "B", buyerPhone: "0300-1234567", buyerCnic: "35202-1234567-1", buyerEmail: "b@example.com" });
+    const rows = await sales.agentReport();
+    const hassan = rows.find((r) => r.key === "ag1")!;
+    const own = (await sales.listSales()).filter((s) => s.agentId === "ag1");
+    assert.equal(hassan.units, own.length);
+    assert.equal(hassan.revenue, own.reduce((n, s) => n + s.price, 0));
+    assert.equal(hassan.commission, Math.round((hassan.revenue * 2) / 100));
+    assert.equal(rows.find((r) => r.kind === "manager")!.units, 1); // the manager's own sale
+    assert.equal(rows.find((r) => r.kind === "direct")!.units, 1);
+    assert.equal(rows.find((r) => r.kind === "manager")!.commission, 0);
+    assert.equal(rows.reduce((n, r) => n + r.units, 0), (await sales.listSales()).length); // nothing is missing or counted twice
+  });
+
+  it("a monthly report covers only that month's sales, calls and leads", async () => {
+    // demo data: ag1 sold on 2026-09-28; ag2 on 2026-10-05; ag3 on 2026-10-09
+    const sept = await sales.monthlyReport("2026-09");
+    assert.equal(sept.find((r) => r.key === "ag1")!.units, 1);
+    assert.equal(sept.find((r) => r.key === "ag2")!.units, 0);
+    const oct = await sales.monthlyReport("2026-10");
+    assert.equal(oct.find((r) => r.key === "ag2")!.units, 1);
+    assert.equal(oct.find((r) => r.key === "ag3")!.units, 1);
+    assert.equal(oct.find((r) => r.key === "ag1")!.units, 0);
+    assert.equal(sept.find((r) => r.key === "ag1")!.revenue, 18_500_000);
+    await assert.rejects(sales.monthlyReport("2026-13"), /must look like/);
+    await assert.rejects(sales.monthlyReport("oct"), /must look like/);
+
+    // calls count in the month they were made
+    const lead = await sales.addLead({ name: "Caller", phone: "0300-1234567", projectId: "p3", source: "walk-in", agentId: "ag2" });
+    await sales.logContact({ leadId: lead.id, channel: "call" });
+    await sales.logContact({ leadId: lead.id, channel: "whatsapp" });
+    const now = (await sales.monthlyReport(today().slice(0, 7))).find((r) => r.key === "ag2")!;
+    assert.equal(now.calls, 1);
+    assert.equal(now.whatsapp, 1);
+    assert.ok(now.leads >= 1);
+  });
+
+  it("saves a report for every finished month and keeps it, and a month still running is saved only when asked", async () => {
+    const current = today().slice(0, 7);
+    const saved = await sales.savedMonthlyReports();
+    const sept = saved.find((r) => r.period === "2026-09")!;
+    assert.equal(sept.final, true);
+    assert.equal(sept.rows.find((r) => r.key === "ag1")!.units, 1);
+    assert.equal(saved.some((r) => r.period === current), false); // not saved on its own
+
+    // what was saved does not change when the sales change later
+    await sales.recordSale({ category: "general", projectId: "p3", agentId: "ag1", unit: "Plot R-9", area: 1 });
+    const again = (await sales.savedMonthlyReports()).find((r) => r.period === "2026-09")!;
+    assert.equal(again.generatedAt, sept.generatedAt);
+
+    const now = await sales.saveMonthlyReport(current);
+    assert.equal(now.final, false); // "so far"
+    assert.equal(now.rows.find((r) => r.key === "ag1")!.units >= 1, true);
+    assert.equal((await sales.savedMonthlyReports()).find((r) => r.period === current)?.final, false);
+  });
+
+  it("catches up on every month that passed unopened, so any old month's report can be taken out", async () => {
+    // an old sale, as if the reports had not been looked at for a long time
+    await new MockSalesRepository().saveSale({
+      id: "sl_old", projectId: "p1", agentId: "ag1", leadId: null, category: "general", unit: "Old-1", area: 100, rate: 1000, listPrice: 100_000, price: 100_000, date: "2025-03-10",
+    });
+    const saved = await sales.savedMonthlyReports();
+    const periods = saved.map((r) => r.period).sort();
+    const current = today().slice(0, 7);
+    assert.equal(periods[0], "2025-03");
+    // no month between March 2025 and now is missing, and only the running month is left out
+    let expected = "2025-03";
+    for (const period of periods) {
+      assert.equal(period, expected);
+      expected = addMonths(`${expected}-01`, 1).slice(0, 7);
+    }
+    assert.equal(expected, current);
+    assert.equal(saved.every((r) => r.final), true);
+
+    // any of those months can be opened, with each agent's numbers
+    const march = saved.find((r) => r.period === "2025-03")!;
+    assert.equal(march.rows.find((r) => r.key === "ag1")!.units, 1);
+    assert.equal(march.rows.find((r) => r.key === "ag1")!.revenue, 100_000);
+    const may = saved.find((r) => r.period === "2025-05")!;
+    assert.equal(may.rows.find((r) => r.key === "ag1")!.units, 0); // a month with no sales still has its report
+    assert.equal(may.rows.some((r) => r.key === "ag2"), true); // every agent is listed
+  });
+
+  it("shows one agent's month in detail: their sales with commission, and the leads forwarded to them", async () => {
+    // demo data: ag1 sold Flat 10-04 on 2026-09-28 for 18,500,000 (2% commission); lead l1 was created 2026-09-05
+    const detail = await sales.agentMonthDetail("ag1", "2026-09");
+    assert.equal(detail.agent.name, "Hassan Ali");
+    assert.equal(detail.sales.length, 1);
+    assert.equal(detail.sales[0].price, 18_500_000);
+    assert.equal(detail.sales[0].commission, 370_000);
+    assert.equal(detail.row.units, 1);
+    assert.equal(detail.row.revenue, 18_500_000);
+    assert.equal(detail.leads.some((l) => l.id === "l1"), true);
+    assert.equal((await sales.agentMonthDetail("ag1", "2026-08")).sales.length, 0); // a month with nothing still has its page
+    await assert.rejects(sales.agentMonthDetail("nope", "2026-09"), /Agent not found/);
+    await assert.rejects(sales.agentMonthDetail("ag1", "2026-9"), /must look like/);
+  });
+
+  it("an agent writes what was said on a call and when to follow up, and the nearest follow-up comes first", async () => {
+    const lead = (name: string) => sales.addLead({ name, phone: "0300-1234567", projectId: "p3", source: "walk-in", agentId: "ag1" });
+    const [a, b, c] = [await lead("Far Client"), await lead("Near Client"), await lead("No Date Client")];
+    const contact = async (leadId: string) => sales.logContact({ leadId, channel: "call" }, "ag1");
+    const hours = (n: number) => new Date(Date.now() + n * 3_600_000).toISOString();
+
+    const far = await sales.saveContactNote({ contactId: (await contact(a.id)).id, comment: "Call me next week", followUpAt: hours(24 * 7) }, "ag1");
+    const near = await sales.saveContactNote({ contactId: (await contact(b.id)).id, comment: "Busy now, call at 5", followUpAt: hours(2) }, "ag1");
+    const plain = await sales.saveContactNote({ contactId: (await contact(c.id)).id, comment: "Not interested yet" }, "ag1");
+    assert.equal(far.comment, "Call me next week");
+    assert.equal(plain.followUpAt, undefined); // a note without a follow-up date is fine
+
+    const list = await sales.followUps("ag1");
+    assert.deepEqual(list.map((f) => f.leadName), ["Near Client", "Far Client"]); // nearest first, the lead with no date is not in it
+    assert.equal(list[0].comment, "Busy now, call at 5");
+    assert.equal((await sales.followUps("ag2")).length, 0); // another agent sees none of them
+
+    // the lead list shows the latest note and the next follow-up
+    const summary = (await sales.contactSummary()).get(b.id)!;
+    assert.equal(summary.lastComment, "Busy now, call at 5");
+    assert.equal(summary.nextFollowUpAt, near.followUpAt);
+    assert.equal((await sales.agentPortal("ag1")).leads.find((l) => l.id === b.id)!.history.length, 1);
+  });
+
+  it("a follow-up must be in the future, belongs to its agent, and ends when it is done or the client is contacted again", async () => {
+    const lead = await sales.addLead({ name: "Later Client", phone: "0300-1234567", projectId: "p3", source: "walk-in", agentId: "ag1" });
+    const first = await sales.logContact({ leadId: lead.id, channel: "whatsapp" }, "ag1");
+    const hours = (n: number) => new Date(Date.now() + n * 3_600_000).toISOString();
+
+    await assert.rejects(sales.saveContactNote({ contactId: first.id, followUpAt: hours(-1) }, "ag1"), /still to come/);
+    await assert.rejects(sales.saveContactNote({ contactId: first.id, followUpAt: "next friday" }, "ag1"), ZodError);
+    await assert.rejects(sales.saveContactNote({ contactId: first.id, comment: "x" }, "ag2"), /Contact not found/);
+    await assert.rejects(sales.completeFollowUp(first.id, "ag1"), /no follow-up/);
+
+    await sales.saveContactNote({ contactId: first.id, comment: "Call tomorrow", followUpAt: hours(20) }, "ag1");
+    assert.equal((await sales.followUps("ag1")).some((f) => f.contactId === first.id), true);
+    await assert.rejects(sales.completeFollowUp(first.id, "ag2"), /Contact not found/);
+
+    // contacting the client again counts as following up
+    await sales.logContact({ leadId: lead.id, channel: "call" }, "ag1");
+    assert.equal((await sales.followUps("ag1")).some((f) => f.contactId === first.id), false);
+
+    // a new promise, then marked done by hand
+    const second = await sales.logContact({ leadId: lead.id, channel: "call" }, "ag1");
+    await sales.saveContactNote({ contactId: second.id, followUpAt: hours(30) }, "ag1");
+    assert.equal((await sales.followUps("ag1")).some((f) => f.contactId === second.id), true);
+    await sales.completeFollowUp(second.id, "ag1");
+    assert.equal((await sales.followUps("ag1")).some((f) => f.contactId === second.id), false);
+
+    // saving the note again can clear the date
+    const third = await sales.logContact({ leadId: lead.id, channel: "call" }, "ag1");
+    await sales.saveContactNote({ contactId: third.id, comment: "Booked a visit", followUpAt: hours(5) }, "ag1");
+    const cleared = await sales.saveContactNote({ contactId: third.id, comment: "Changed my mind", followUpAt: null }, "ag1");
+    assert.equal(cleared.followUpAt, undefined);
+    assert.equal(cleared.comment, "Changed my mind");
+  });
+
+  it("a lead that is sold no longer shows a follow-up", async () => {
+    const lead = await sales.addLead({ name: "Buyer Soon", phone: "0300-1234567", projectId: "p3", source: "walk-in", agentId: "ag1" });
+    const contact = await sales.logContact({ leadId: lead.id, channel: "call" }, "ag1");
+    await sales.saveContactNote({ contactId: contact.id, followUpAt: new Date(Date.now() + 3_600_000).toISOString() }, "ag1");
+    assert.equal((await sales.followUps("ag1")).some((f) => f.leadId === lead.id), true);
+    await sales.recordAgentSale(
+      { agentId: "ag1", leadId: lead.id, projectId: "p3", category: "general", unit: "Plot F-1", area: 1, buyer: "Buyer Soon", buyerPhone: "0300-1234567", buyerCnic: "35202-1234567-1", buyerEmail: "b@example.com" },
+      "ag1",
+    );
+    assert.equal((await sales.followUps("ag1")).some((f) => f.leadId === lead.id), false);
+  });
+
   it("rejects invalid leads", async () => {
     await assert.rejects(sales.addLead({ name: "", phone: "1", projectId: "p1", source: "facebook" }), ZodError);
   });

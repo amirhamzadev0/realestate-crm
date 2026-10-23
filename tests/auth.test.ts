@@ -15,7 +15,7 @@ let clock: number;
 let auth: AuthService;
 
 async function user(id: string, role: UserCredential["role"], projectId: string | null, extra: Partial<UserCredential> = {}) {
-  return { id, email: `${id}@test.local`, name: id, role, projectId, passwordHash: await hashPassword("correct-horse"), enabled: true, ...extra };
+  return { id, email: `${id}@test.local`, name: id, role, projectId, agentId: null as string | null, passwordHash: await hashPassword("correct-horse"), enabled: true, ...extra };
 }
 
 beforeEach(async () => {
@@ -26,6 +26,8 @@ beforeEach(async () => {
     await user("ghost", "project-admin", "no-such-project"),
     await user("lost", "project-admin", null),
     await user("off", "sales", null, { enabled: false }),
+    await user("agent1", "agent", null, { agentId: "ag1" }),
+    await user("noagent", "agent", null),
   ];
   sessions = new MemorySessionRepository();
   clock = 1_000_000;
@@ -54,6 +56,11 @@ describe("login", () => {
   it("signs in and sends each role to its own portal", async () => {
     assert.equal((await auth.login({ email: "owner@test.local", password: "correct-horse" })).home, "/superadmin");
     assert.equal((await auth.login({ email: "PM@test.local", password: "correct-horse" })).home, "/projects/green-valley");
+  });
+
+  it("sends an agent to their own portal, and refuses an agent account without an agent", async () => {
+    assert.equal((await auth.login({ email: "agent1@test.local", password: "correct-horse" })).home, "/agent/ag1");
+    assert.equal(await status(auth.login({ email: "noagent@test.local", password: "correct-horse" })), 401);
   });
 
   it("returns the same 401 for a wrong password and an unknown email", async () => {

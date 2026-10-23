@@ -4,6 +4,8 @@ import assignments from "@/data/mock/assignments.json";
 import attendance from "@/data/mock/attendance.json";
 import changeRequests from "@/data/mock/change-requests.json";
 import campaigns from "@/data/mock/campaigns.json";
+import leadContacts from "@/data/mock/lead-contacts.json";
+import monthlyReports from "@/data/mock/monthly-reports.json";
 import leads from "@/data/mock/leads.json";
 import managers from "@/data/mock/managers.json";
 import materialRequests from "@/data/mock/material-requests.json";
@@ -11,6 +13,7 @@ import materials from "@/data/mock/materials.json";
 import payments from "@/data/mock/payments.json";
 import projects from "@/data/mock/projects.json";
 import sales from "@/data/mock/sales.json";
+import salesManagers from "@/data/mock/sales-managers.json";
 import site from "@/data/mock/site.json";
 import stock from "@/data/mock/stock.json";
 import workers from "@/data/mock/workers.json";
@@ -20,7 +23,7 @@ import type { Manager } from "@/models/manager";
 import type { Material, MaterialRequest, StockItem } from "@/models/inventory";
 import type { AttendanceRecord, PayrollPayment, Worker, WorkAssignment } from "@/models/hr";
 import type { Project } from "@/models/project";
-import type { Agent, Campaign, Lead, Sale } from "@/models/sales";
+import type { Agent, Campaign, Lead, LeadContact, MonthlyReportSnapshot, Sale, SalesManager } from "@/models/sales";
 import type { PortalInfo } from "@/models/site";
 
 export interface MockStore {
@@ -35,9 +38,12 @@ export interface MockStore {
   attendance: AttendanceRecord[];
   assignments: WorkAssignment[];
   payments: PayrollPayment[];
+  salesManagers: SalesManager[];
   agents: Agent[];
   campaigns: Campaign[];
   leads: Lead[];
+  leadContacts: LeadContact[];
+  monthlyReports: MonthlyReportSnapshot[];
   sales: Sale[];
   changeRequests: ChangeRequest[];
 }
@@ -64,9 +70,12 @@ export function getStore(): MockStore {
     attendance,
     assignments,
     payments,
+    salesManagers,
     agents,
     campaigns,
     leads,
+    leadContacts,
+    monthlyReports,
     sales,
     changeRequests,
   }) as unknown as MockStore;
