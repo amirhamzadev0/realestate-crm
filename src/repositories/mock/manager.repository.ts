@@ -13,4 +13,10 @@ export class MockManagerRepository implements ManagerRepository {
   async save(manager: Manager) {
     return upsert(getStore().managers, manager);
   }
+  async remove(id: string) {
+    const store = getStore();
+    const before = store.managers.length;
+    store.managers = store.managers.filter((m) => m.id !== id);
+    return store.managers.length < before;
+  }
 }

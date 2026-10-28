@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ManagerRemover } from "@/components/forms/ManagerRemover";
 import { ManagerEditForm, NewManagerForm, NewProjectForm, ProjectEditForm } from "@/components/forms/ProjectForms";
 import { ProjectCard } from "@/components/projects/ProjectCard";
 import { Badge } from "@/components/ui/Badge";
@@ -30,50 +31,41 @@ export default async function SuperAdminProjectsPage() {
         <NewProjectForm managers={managers} />
       </Card>
 
-      <h2 className="section-title">Managers</h2>
-      <Card title="Project managers">
-        {managers.length === 0 ? (
-          <EmptyState>No managers yet.</EmptyState>
-        ) : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Contact</th>
-                  <th>Runs project</th>
-                  <th>Status</th>
-                  <th>Edit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {managers.map((manager) => (
-                  <tr key={manager.id}>
-                    <td>{manager.name}</td>
-                    <td>
-                      {manager.phone || "-"}
-                      {manager.email ? <div className="muted">{manager.email}</div> : null}
-                    </td>
-                    <td>{manager.projectName ?? <span className="muted">Not assigned</span>}</td>
-                    <td>
-                      <Badge tone={manager.active ? "success" : "neutral"}>{manager.active ? "active" : "inactive"}</Badge>
-                    </td>
-                    <td>
+      <Card title="Add a new manager">
+        <NewManagerForm />
+      </Card>
+      <details className="row-edit">
+        <summary className="button button--ghost">Edit or delete a manager ({managers.length})</summary>
+        <Card title="Project managers">
+          {managers.length === 0 ? (
+            <EmptyState>No managers yet.</EmptyState>
+          ) : (
+            <ul className="manager-list">
+              {managers.map((manager) => (
+                <li key={manager.id} className="manager-list__item">
+                  <div className="manager-list__head">
+                    <span>
+                      <strong>{manager.name}</strong> <Badge tone={manager.active ? "success" : "neutral"}>{manager.active ? "active" : "inactive"}</Badge>
+                      <div className="muted">
+                        {manager.projectName ? `Runs ${manager.projectName}` : "Not assigned to a project"}
+                        {manager.phone ? ` - ${manager.phone}` : ""}
+                        {manager.email ? ` - ${manager.email}` : ""}
+                      </div>
+                    </span>
+                    <span className="row-actions">
                       <details className="row-edit">
                         <summary className="button button--ghost button--small">Edit</summary>
                         <ManagerEditForm manager={manager} />
                       </details>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
-      <Card title="Add a new manager">
-        <NewManagerForm />
-      </Card>
+                      <ManagerRemover manager={manager} freeManagers={managers.filter((m) => m.active && m.id !== manager.id && m.projectId === null)} />
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </details>
     </>
   );
 }

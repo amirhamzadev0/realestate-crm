@@ -1,0 +1,1 @@
+ALTER TABLE projects ADD COLUMN total_area DECIMAL(18,2) NOT NULL DEFAULT 0 AFTER total_units;

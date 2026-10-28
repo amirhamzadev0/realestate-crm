@@ -2,13 +2,19 @@ import "server-only";
 
 import { cache } from "react";
 import type { PlotCategory } from "@/models/project";
-import { accountService, changeRequestService, hrService, inventoryService, projectService, salesService } from "@/server/container";
+import { addDays } from "@/utils/date";
+import { today } from "@/utils/id";
+import { closedOrders, HISTORY_LIMIT } from "@/viewmodels/warehouse.viewmodel";
+import { accountService, changeRequestService, financeService, hrService, inventoryService, projectService, salesService } from "@/server/container";
+
+/** The day of the newest delivery of an order, or "" when nothing has arrived. */
+const lastDelivery = (r: { deliveries?: { date: string }[]; receivedAt?: string }) => r.deliveries?.at(-1)?.date ?? r.receivedAt ?? "";
 
 export const getSuperAdminDashboard = cache(async () => {
   const projects = await projectService.list();
   const [soldByProject, soldByCategory] = await Promise.all([salesService.unitsSold(), salesService.soldByCategory()]);
 
-  const [rows, requests, report, pendingPeople, materials, pendingPayroll] = await Promise.all([
+  const [rows, requests, report, pendingPeople, materials, pendingPayroll, instalments] = await Promise.all([
     Promise.all(
       projects.map(async (project) => {
         const [accounts, hr] = await Promise.all([accountService.summary(project.id), hrService.summary(project.id)]);
@@ -20,10 +26,53 @@ export const getSuperAdminDashboard = cache(async () => {
     changeRequestService.list({ status: "pending" }),
     inventoryService.listMaterials(),
     Promise.all(projects.map((project) => hrService.pendingPayroll(project.id))).then((lists) => lists.flat()),
+    financeService.summary(),
   ]);
+
+  const combined = rows.reduce(
+    (sum, r) => ({
+      credit: sum.credit + r.accounts.credit,
+      debit: sum.debit + r.accounts.debit,
+      expense: sum.expense + r.accounts.expense,
+      sales: sum.sales + r.accounts.sales,
+      purchase: sum.purchase + r.accounts.purchase,
+      balance: sum.balance + r.accounts.balance,
+    }),
+    { credit: 0, debit: 0, expense: 0, sales: 0, purchase: 0, balance: 0 },
+  );
+  const projectName = Object.fromEntries(projects.map((project) => [project.id, project.name]));
+
+  // Who is waiting for money: vendors with delivered orders not fully paid, and staff or labour with pay that has come due.
+  const dueOrders = requests.filter((r) => r.status === "fulfilled" && r.balanceDue > 0);
+  const vendors = new Map<string, { name: string; orders: number; amount: number }>();
+  for (const order of dueOrders) {
+    const name = order.vendor?.trim() || "Vendor not named";
+    const entry = vendors.get(name) ?? { name, orders: 0, amount: 0 };
+    entry.orders += 1;
+    entry.amount += order.balanceDue;
+    vendors.set(name, entry);
+  }
+  const people = new Map<string, { name: string; project: string; items: number; amount: number }>();
+  for (const item of pendingPayroll) {
+    const key = `${item.workerId}|${item.projectId}`;
+    const entry = people.get(key) ?? { name: item.workerName, project: projectName[item.projectId] ?? "-", items: 0, amount: 0 };
+    entry.items += 1;
+    entry.amount += item.amount;
+    people.set(key, entry);
+  }
+  const owedToVendors = [...vendors.values()].sort((a, b) => b.amount - a.amount);
+  const owedToPeople = [...people.values()].sort((a, b) => b.amount - a.amount);
 
   return {
     rows,
+    instalments,
+    combined,
+    owed: {
+      vendors: owedToVendors,
+      people: owedToPeople,
+      vendorTotal: owedToVendors.reduce((sum, v) => sum + v.amount, 0),
+      peopleTotal: owedToPeople.reduce((sum, p) => sum + p.amount, 0),
+    },
     materials,
     pendingPayroll,
     projectNames: Object.fromEntries(projects.map((project) => [project.id, project.name])),
@@ -32,9 +81,10 @@ export const getSuperAdminDashboard = cache(async () => {
     onOrder: requests.filter((r) => r.status === "ordered"),
     paymentsDue: requests.filter((r) => r.status === "fulfilled" && r.balanceDue > 0),
     // Orders the project managers marked received in the last two weeks, newest first, so the Super Admin sees them arrive.
+    // Part deliveries count too: the order shows how much arrived and how much is still to come.
     recentlyReceived: requests
-      .filter((r) => r.status === "fulfilled" && (r.receivedAt ?? "") >= new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10))
-      .sort((a, b) => (b.receivedAt ?? "").localeCompare(a.receivedAt ?? "")),
+      .filter((r) => lastDelivery(r) >= addDays(today(), -14))
+      .sort((a, b) => lastDelivery(b).localeCompare(lastDelivery(a))),
     pendingPeople,
     sales: report,
     totals: {
@@ -51,7 +101,8 @@ export const getApprovalsPage = cache(async () => {
     pending: requests.filter((r) => r.status === "pending"),
     onOrder: requests.filter((r) => r.status === "ordered"),
     paymentsDue: requests.filter((r) => r.status === "fulfilled" && r.balanceDue > 0),
-    history: requests.filter((r) => r.status === "fulfilled" || r.status === "rejected"),
+    history: closedOrders(requests).slice(0, HISTORY_LIMIT),
+    historyTotal: closedOrders(requests).length,
     pendingPeople: people.filter((r) => r.status === "pending"),
     peopleHistory: people.filter((r) => r.status !== "pending"),
   };

@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Material, MaterialRequest, RequestStatus, StockItem } from "@/models/inventory";
+import type { Delivery, Material, OrderPayment, MaterialRequest, RequestStatus, StockItem } from "@/models/inventory";
 import type { InventoryRepository } from "@/repositories/contracts";
 import { run, select, selectOne, where, type Row } from "./db";
 
@@ -9,14 +9,14 @@ const STOCK_COLUMNS = `s.id, s.project_id AS projectId, s.material_id AS materia
 const REQUEST_COLUMNS = `id, project_id AS projectId, material_id AS materialId, quantity, note,
   requested_by AS requestedBy, created_at AS createdAt, status, decision_note AS decisionNote, decided_at AS decidedAt,
   ordered_at AS orderedAt, received_at AS receivedAt, vendor, total_amount AS totalAmount, payment_terms AS paymentTerms,
-  amount_paid AS amountPaid, paid_at AS paidAt`;
+  amount_paid AS amountPaid, paid_at AS paidAt, deliveries, payments`;
 
 const decodeMaterial = (row: Row) => row as unknown as Material;
 const decodeStock = (row: Row) => row as unknown as StockItem;
 
 /** NULL decision columns are left out, matching the mock data where the keys are simply absent. */
 function decodeRequest(row: Row): MaterialRequest {
-  const { decisionNote, decidedAt, orderedAt, receivedAt, vendor, totalAmount, paymentTerms, paidAt, ...rest } = row as unknown as MaterialRequest;
+  const { decisionNote, decidedAt, orderedAt, receivedAt, vendor, totalAmount, paymentTerms, paidAt, deliveries, payments, ...rest } = row as unknown as MaterialRequest;
   return {
     ...rest,
     ...(decisionNote != null ? { decisionNote } : {}),
@@ -27,6 +27,8 @@ function decodeRequest(row: Row): MaterialRequest {
     ...(totalAmount != null ? { totalAmount: Number(totalAmount) } : {}),
     ...(paymentTerms != null ? { paymentTerms } : {}),
     ...(paidAt != null ? { paidAt } : {}),
+    ...(payments != null ? { payments: (typeof payments === "string" ? JSON.parse(payments) : payments) as OrderPayment[] } : {}),
+    ...(deliveries != null ? { deliveries: (typeof deliveries === "string" ? JSON.parse(deliveries) : deliveries) as Delivery[] } : {}),
   };
 }
 
@@ -81,12 +83,12 @@ export class MysqlInventoryRepository implements InventoryRepository {
     await run(
       `INSERT INTO material_requests
          (id, project_id, material_id, quantity, note, requested_by, created_at, status, decision_note, decided_at, ordered_at, received_at,
-          vendor, total_amount, payment_terms, amount_paid, paid_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          vendor, total_amount, payment_terms, amount_paid, paid_at, deliveries, payments)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE status = VALUES(status), decision_note = VALUES(decision_note), decided_at = VALUES(decided_at),
          ordered_at = VALUES(ordered_at), received_at = VALUES(received_at),
          vendor = VALUES(vendor), total_amount = VALUES(total_amount), payment_terms = VALUES(payment_terms),
-         amount_paid = VALUES(amount_paid), paid_at = VALUES(paid_at)`,
+         amount_paid = VALUES(amount_paid), paid_at = VALUES(paid_at), deliveries = VALUES(deliveries), payments = VALUES(payments)`,
       [
         request.id,
         request.projectId,
@@ -105,6 +107,8 @@ export class MysqlInventoryRepository implements InventoryRepository {
         request.paymentTerms ?? null,
         request.amountPaid ?? 0,
         request.paidAt ?? null,
+        request.deliveries ? JSON.stringify(request.deliveries) : null,
+        request.payments ? JSON.stringify(request.payments) : null,
       ],
     );
     return request;

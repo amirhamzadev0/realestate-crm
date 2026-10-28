@@ -9,7 +9,7 @@ const CAMPAIGN_COLUMNS = "id, name, platform, project_id AS projectId, budget, s
 const LEAD_COLUMNS = `id, name, phone, project_id AS projectId, source, campaign_id AS campaignId,
   agent_id AS agentId, status, created_at AS createdAt, email, note, assigned_at AS assignedAt`;
 const SALE_COLUMNS =
-  "id, project_id AS projectId, agent_id AS agentId, sold_by_manager_id AS soldByManagerId, lead_id AS leadId, unit, category, buyer, buyer_phone AS buyerPhone, buyer_cnic AS buyerCnic, buyer_email AS buyerEmail, floor, area, rate, list_price AS listPrice, discount_mode AS discountMode, discount_value AS discountValue, discount_amount AS discountAmount, price, sale_date AS date";
+  "id, project_id AS projectId, agent_id AS agentId, sold_by_manager_id AS soldByManagerId, lead_id AS leadId, unit, category, buyer, buyer_phone AS buyerPhone, buyer_cnic AS buyerCnic, buyer_email AS buyerEmail, floor, area, rate, list_price AS listPrice, discount_mode AS discountMode, discount_value AS discountValue, discount_amount AS discountAmount, price, sale_date AS date, payment_type AS paymentType, sale_status AS status";
 
 const decodeAgent = (row: Row) => ({ ...(row as unknown as Agent), active: Boolean(row.active) });
 const decodeCampaign = (row: Row) => ({ ...(row as unknown as Campaign), active: Boolean(row.active) });
@@ -20,9 +20,11 @@ function decodeLead(row: Row): Lead {
 }
 /** A NULL floor is left out, matching the mock data where the key is simply absent. */
 function decodeSale(row: Row): Sale {
-  const { floor, buyer, buyerPhone, buyerCnic, buyerEmail, discountMode, discountValue, discountAmount, ...rest } = row as unknown as Sale;
+  const { floor, buyer, buyerPhone, buyerCnic, buyerEmail, discountMode, discountValue, discountAmount, paymentType, status, ...rest } = row as unknown as Sale;
   return {
     ...rest,
+    ...(paymentType === "installment" ? { paymentType } : {}),
+    ...(status === "booked" ? { status } : {}),
     ...(floor != null ? { floor } : {}),
     ...(buyer != null ? { buyer } : {}),
     ...(buyerPhone != null ? { buyerPhone } : {}),
@@ -138,15 +140,25 @@ export class MysqlSalesRepository implements SalesRepository {
   async listSales() {
     return (await select(`SELECT ${SALE_COLUMNS} FROM sales ORDER BY sale_date DESC, inserted_at DESC`)).map(decodeSale);
   }
+  /**
+   * A new sale is a plain INSERT, so a second sale of the same unit fails (the project and unit are unique) instead of silently
+   * overwriting the first. Saving a sale that exists (its status changing to sold, for example) is an UPDATE.
+   */
   async saveSale(sale: Sale) {
-    await run(
-      `INSERT INTO sales (id, project_id, agent_id, sold_by_manager_id, lead_id, unit, category, buyer, buyer_phone, buyer_cnic, buyer_email, floor, area, rate, list_price, discount_mode, discount_value, discount_amount, price, sale_date)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE unit = VALUES(unit), category = VALUES(category), buyer = VALUES(buyer), buyer_phone = VALUES(buyer_phone), buyer_cnic = VALUES(buyer_cnic), buyer_email = VALUES(buyer_email), floor = VALUES(floor), area = VALUES(area), rate = VALUES(rate), list_price = VALUES(list_price),
-         discount_mode = VALUES(discount_mode), discount_value = VALUES(discount_value), discount_amount = VALUES(discount_amount),
-         price = VALUES(price), sale_date = VALUES(sale_date)`,
-      [sale.id, sale.projectId, sale.agentId, sale.soldByManagerId ?? null, sale.leadId, sale.unit, sale.category, sale.buyer ?? null, sale.buyerPhone ?? null, sale.buyerCnic ?? null, sale.buyerEmail ?? null, sale.floor ?? null, sale.area, sale.rate, sale.listPrice, sale.discountMode ?? null, sale.discountValue ?? null, sale.discountAmount ?? null, sale.price, sale.date],
-    );
+    const values = [sale.projectId, sale.agentId, sale.soldByManagerId ?? null, sale.leadId, sale.unit, sale.category, sale.buyer ?? null, sale.buyerPhone ?? null, sale.buyerCnic ?? null, sale.buyerEmail ?? null, sale.floor ?? null, sale.area, sale.rate, sale.listPrice, sale.discountMode ?? null, sale.discountValue ?? null, sale.discountAmount ?? null, sale.price, sale.date, sale.paymentType ?? "cash", sale.status ?? "sold"];
+    if (await selectOne("SELECT id FROM sales WHERE id = ?", [sale.id])) {
+      await run(
+        `UPDATE sales SET project_id = ?, agent_id = ?, sold_by_manager_id = ?, lead_id = ?, unit = ?, category = ?, buyer = ?, buyer_phone = ?, buyer_cnic = ?, buyer_email = ?, floor = ?, area = ?, rate = ?, list_price = ?,
+           discount_mode = ?, discount_value = ?, discount_amount = ?, price = ?, sale_date = ?, payment_type = ?, sale_status = ? WHERE id = ?`,
+        [...values, sale.id],
+      );
+    } else {
+      await run(
+        `INSERT INTO sales (id, project_id, agent_id, sold_by_manager_id, lead_id, unit, category, buyer, buyer_phone, buyer_cnic, buyer_email, floor, area, rate, list_price, discount_mode, discount_value, discount_amount, price, sale_date, payment_type, sale_status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [sale.id, ...values],
+      );
+    }
     return sale;
   }
 }

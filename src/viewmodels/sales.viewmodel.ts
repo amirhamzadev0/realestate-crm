@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
+import { isOpenLead, isUnforwarded } from "@/utils/leads";
 import { saleUnit } from "@/models/project";
 import type { AgentReportRow } from "@/models/sales";
 import { addMonths } from "@/utils/date";
@@ -24,8 +25,14 @@ export const getLeadsPage = cache(async () => {
     salesService.contactSummary(),
   ]);
   const projectNames = Object.fromEntries(projects.map((p) => [p.id, p.name]));
+  // A lead whose agent was removed shows as not forwarded, so it can be shared again.
+  const activeIds = new Set(agents.filter((a) => a.active).map((a) => a.id));
   return {
-    leads: leads.map((lead) => ({ ...lead, contacts: contacts.get(lead.id) ?? { calls: 0, whatsapp: 0 } })),
+    leads: leads.map((lead) => ({
+      ...lead,
+      ...(lead.agentId && isUnforwarded(lead, activeIds) ? { agentId: null, assignedAt: undefined } : {}),
+      contacts: contacts.get(lead.id) ?? { calls: 0, whatsapp: 0 },
+    })),
     agents,
     activeAgents: agents.filter((a) => a.active),
     projects,
@@ -34,12 +41,13 @@ export const getLeadsPage = cache(async () => {
 });
 
 export const getAgentsPage = cache(async () => {
-  const [report, agents, managers] = await Promise.all([salesService.report(), salesService.listAgents(), salesService.listSalesManagers()]);
+  const [report, agents, managers, leads] = await Promise.all([salesService.report(), salesService.listAgents(), salesService.listSalesManagers(), salesService.listLeads()]);
   const managerName = Object.fromEntries(managers.map((m) => [m.id, m.name]));
   return {
     performance: report.agents,
     agents: agents.filter((a) => a.active).map((agent) => ({ ...agent, managerName: agent.managerId ? (managerName[agent.managerId] ?? "-") : "-" })),
     managers: managers.filter((m) => m.active),
+    openLeads: Object.fromEntries(agents.map((a) => [a.id, leads.filter((l) => l.agentId === a.id && isOpenLead(l)).length])),
   };
 });
 
@@ -199,4 +207,45 @@ export const getAgentFollowUps = cache(async (agentId: string) => {
     at: f.at,
     comment: f.comment,
   }));
+});
+
+const LEADS_SHOWN = 200;
+
+/**
+ * The Leads page: every lead (filtered by project, agent or a search, sorted by project and then newest first), and for each project
+ * how many leads it has, how many are not forwarded yet and who has the rest.
+ */
+export const getLeadsWorkspace = cache(async (filter: { project?: string; agent?: string; q?: string } = {}) => {
+  const base = await getLeadsPage();
+  const { leads, agents, activeAgents, projects, projectNames } = base;
+  const agentName = new Map(agents.map((a) => [a.id, a.name]));
+
+  const byProject = projects
+    .map((project) => {
+      const own = leads.filter((l) => l.projectId === project.id);
+      const perAgent = new Map<string, number>();
+      for (const lead of own) if (lead.agentId) perAgent.set(lead.agentId, (perAgent.get(lead.agentId) ?? 0) + 1);
+      return {
+        project,
+        total: own.length,
+        unassigned: own.filter((l) => !l.agentId).length,
+        open: own.filter((l) => l.status !== "won" && l.status !== "lost").length,
+        perAgent: [...perAgent].map(([id, count]) => ({ name: agentName.get(id) ?? "-", count })).sort((a, b) => b.count - a.count),
+      };
+    })
+    .sort((a, b) => a.project.name.localeCompare(b.project.name));
+
+  const needle = (filter.q ?? "").trim().toLowerCase();
+  const digits = needle.replace(/\D/g, "");
+  const project = projects.find((p) => p.slug === filter.project) ?? null;
+  const matching = leads
+    .filter((l) => !project || l.projectId === project.id)
+    .filter((l) => !filter.agent || (filter.agent === "none" ? !l.agentId : l.agentId === filter.agent))
+    .filter((l) => !needle || l.name.toLowerCase().includes(needle) || (digits !== "" && l.phone.replace(/\D/g, "").includes(digits)))
+    .sort(
+      (a, b) =>
+        (projectNames[a.projectId] ?? "").localeCompare(projectNames[b.projectId] ?? "") || b.createdAt.localeCompare(a.createdAt) || a.name.localeCompare(b.name),
+    );
+
+  return { agents, activeAgents, projects, projectNames, byProject, total: leads.length, project, matching: matching.slice(0, LEADS_SHOWN), matchingCount: matching.length, shownAll: matching.length <= LEADS_SHOWN };
 });

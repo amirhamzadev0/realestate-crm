@@ -6,7 +6,8 @@ import { StockTable } from "@/components/inventory/StockTable";
 import { Badge } from "@/components/ui/Badge";
 import { Card, StatCard } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { formatCompactMoney } from "@/utils/format";
+import { saleUnit } from "@/models/project";
+import { formatCompactMoney, formatNumber } from "@/utils/format";
 import { getProjectOverview, getProjectShell } from "@/viewmodels/project.viewmodel";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -23,7 +24,7 @@ export default async function ProjectOverviewPage({ params }: Props) {
 
   return (
     <>
-      <PageHeader title={project.name} subtitle={`${project.location} - ${project.totalUnits} units`} actions={<Badge>{project.status}</Badge>} />
+      <PageHeader title={project.name} subtitle={`${project.location} - ${project.totalUnits} units${project.totalArea > 0 ? ` - ${formatNumber(project.totalArea)} ${saleUnit[project.type].area} total area` : ""}`} actions={<Badge>{project.status}</Badge>} />
 
       <h2 className="section-title">Accounts</h2>
       <AccountSummaryCards summary={accounts} />

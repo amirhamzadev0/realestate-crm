@@ -122,7 +122,9 @@ export interface Sale {
   discountMode?: Exclude<DiscountMode, "none">; // set when the Super Admin gave a discount
   discountValue?: number; // the amount, the discounted rate or the percentage, as entered
   discountAmount?: number; // listPrice - price
-  price: number; // what the buyer pays; this is what the project is credited
+  price: number; // what the buyer pays in all; credited to the project at once for cash, and as the instalments come in otherwise
+  paymentType?: "cash" | "installment"; // missing means cash
+  status?: "booked" | "sold"; // booked: sold on instalments that are not all paid yet; missing means sold
   date: string;
 }
 

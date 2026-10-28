@@ -3,6 +3,7 @@ import "server-only";
 import { MemorySessionRepository, MemoryUserRepository } from "@/repositories/auth/memory.repository";
 import { MysqlSessionRepository, MysqlUserRepository } from "@/repositories/auth/mysql.repository";
 import { MockChangeRequestRepository } from "@/repositories/mock/change-request.repository";
+import { MockFinanceRepository } from "@/repositories/mock/finance.repository";
 import { MockAccountRepository } from "@/repositories/mock/account.repository";
 import { MockManagerRepository } from "@/repositories/mock/manager.repository";
 import { MockHrRepository } from "@/repositories/mock/hr.repository";
@@ -12,6 +13,7 @@ import { MockSalesRepository } from "@/repositories/mock/sales.repository";
 import { MockSiteRepository } from "@/repositories/mock/site.repository";
 import { MysqlAccountRepository } from "@/repositories/mysql/account.repository";
 import { MysqlChangeRequestRepository } from "@/repositories/mysql/change-request.repository";
+import { MysqlFinanceRepository } from "@/repositories/mysql/finance.repository";
 import { MysqlHrRepository } from "@/repositories/mysql/hr.repository";
 import { MysqlInventoryRepository } from "@/repositories/mysql/inventory.repository";
 import { MysqlManagerRepository } from "@/repositories/mysql/manager.repository";
@@ -21,6 +23,7 @@ import { loadBootstrapUsers } from "@/server/auth/bootstrap-users";
 import { AccountService } from "@/services/account.service";
 import { AuthService } from "@/services/auth.service";
 import { ChangeRequestService } from "@/services/change-request.service";
+import { FinanceService } from "@/services/finance.service";
 import { HrService } from "@/services/hr.service";
 import { InventoryService } from "@/services/inventory.service";
 import { ProjectService } from "@/services/project.service";
@@ -48,7 +51,9 @@ export const inventoryService = new InventoryService(
   accountRepository,
 );
 export const hrService = new HrService(useMysql ? new MysqlHrRepository() : new MockHrRepository(), projectRepository);
-export const salesService = new SalesService(salesRepository, projectRepository, accountRepository);
+const financeRepository = useMysql ? new MysqlFinanceRepository() : new MockFinanceRepository();
+export const salesService = new SalesService(salesRepository, projectRepository, accountRepository, financeRepository);
+export const financeService = new FinanceService(financeRepository, salesRepository, projectRepository, accountRepository);
 export const changeRequestService = new ChangeRequestService(
   useMysql ? new MysqlChangeRequestRepository() : new MockChangeRequestRepository(),
   projectRepository,

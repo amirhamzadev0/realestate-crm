@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { ChangeRequestTable } from "@/components/people/ChangeRequestTable";
 import { PaymentsDueTable } from "@/components/inventory/PaymentsDueTable";
 import { RequestTable } from "@/components/inventory/RequestTable";
@@ -9,7 +10,7 @@ import { getApprovalsPage } from "@/viewmodels/superadmin.viewmodel";
 export const metadata: Metadata = { title: "Approvals" };
 
 export default async function ApprovalsPage() {
-  const { pending, onOrder, paymentsDue, history, pendingPeople, peopleHistory } = await getApprovalsPage();
+  const { pending, onOrder, paymentsDue, history, historyTotal, pendingPeople, peopleHistory } = await getApprovalsPage();
 
   return (
     <>
@@ -29,7 +30,14 @@ export default async function ApprovalsPage() {
       <Card title={`Ordered, waiting to arrive (${onOrder.length})`}>
         <RequestTable requests={onOrder} mode="deliver" canCancel />
       </Card>
-      <Card title="Material history">
+      <Card
+        title={`Material history (latest ${history.length} of ${historyTotal})`}
+        action={
+          <Link href="/warehouse/history" className="link">
+            View all records
+          </Link>
+        }
+      >
         <RequestTable requests={history} />
       </Card>
       <Card title="People change history">

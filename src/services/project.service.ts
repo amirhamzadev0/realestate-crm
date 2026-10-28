@@ -33,8 +33,22 @@ export const projectSchema = z.object({
   status: z.enum(["planning", "under-construction", "completed"]),
   startDate: z.iso.date(),
   totalUnits: z.number().int().min(0).max(SAFE_MAX).optional(),
+  totalArea: z.number().min(0).max(SAFE_MAX).default(0),
   budget: z.number().min(0).max(SAFE_MAX),
   managerId: z.string().min(1).nullable().default(null),
+  // Needed when the chosen manager runs another project: who takes that project over (an existing free manager, or a new one).
+  handover: z
+    .object({
+      replacementId: z.string().min(1).optional(),
+      replacement: z
+        .object({
+          name: z.string().trim().min(1).max(120),
+          phone: z.string().trim().max(40).default(""),
+          email: z.union([z.literal(""), z.string().trim().toLowerCase().email().max(254)]).default(""),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 export const managerSchema = z.object({
@@ -123,10 +137,33 @@ export class ProjectService {
     return manager;
   }
 
+  /**
+   * Moving a manager who runs project A to another project: A must not be left without a manager, so someone has to take
+   * A over first (`handover`: an existing manager with no project, or a new manager to create). Does nothing when the
+   * manager is free or already runs `projectId`.
+   */
+  private async handOver(managerId: string | null, projectId: string | null, handover: z.infer<typeof projectSchema>["handover"]): Promise<void> {
+    if (!managerId) return;
+    const manager = await this.managers.find(managerId);
+    if (!manager) return; // resolveManager reports it
+    const other = (await this.repo.list()).find((p) => p.managerId === managerId && p.id !== projectId);
+    if (!other) return;
+    if (!manager.active) throw new AppError(`${manager.name} is inactive and cannot be assigned`, 409);
+    if (!handover?.replacementId && !handover?.replacement) {
+      throw new AppError(`${manager.name} runs ${other.name}. Choose or create a new manager for ${other.name} first.`, 409);
+    }
+    if (handover.replacementId === managerId) throw new AppError("Choose a different manager to take over", 400);
+    const next = handover.replacementId
+      ? await this.resolveManager(handover.replacementId, other.id)
+      : await this.managers.save({ ...handover.replacement!, id: newId("mgr"), active: true });
+    await this.repo.save({ ...other, managerId: next?.id ?? null, adminName: next?.name ?? UNASSIGNED });
+  }
+
   /** A new project. The URL slug comes from the name and stays fixed afterwards. */
   async create(input: unknown): Promise<Project> {
-    const { totalUnits, rates, units, ...data } = projectSchema.parse(input);
+    const { totalUnits, rates, units, handover, ...data } = projectSchema.parse(input);
     const settled = layout(data.type, { rates, units, totalUnits });
+    await this.handOver(data.managerId, null, handover);
     const manager = await this.resolveManager(data.managerId, null);
     const projects = await this.repo.list();
 
@@ -151,9 +188,10 @@ export class ProjectService {
     const existing = await this.repo.findById(id);
     if (!existing) throw notFound("Project");
     // The type decides how units are sold and recorded, so it is fixed once the project exists.
-    const { totalUnits, rates, units, ...data } = projectSchema.omit({ type: true }).parse(input);
+    const { totalUnits, rates, units, handover, ...data } = projectSchema.omit({ type: true }).parse(input);
     const settled = layout(existing.type, { rates, units, totalUnits });
     await this.assertRoomForSales(existing, settled);
+    await this.handOver(data.managerId, id, handover);
     const manager = await this.resolveManager(data.managerId, id);
     return this.repo.save({
       ...existing,
@@ -207,6 +245,30 @@ export class ProjectService {
   async createManager(input: unknown): Promise<Manager> {
     const data = managerSchema.parse(input);
     return this.managers.save({ ...data, id: newId("mgr"), active: true });
+  }
+
+  /**
+   * Deletes a manager. A manager who runs a project can only be deleted once someone takes the project over: pass
+   * `replacementId` (an existing manager with no project) or `replacement` (a new manager to create). The new manager is
+   * assigned first, then the old one is deleted.
+   */
+  async deleteManager(id: string, input: unknown = {}): Promise<void> {
+    const existing = await this.managers.find(id);
+    if (!existing) throw notFound("Manager");
+    const { replacementId, replacement } = z.object({ replacementId: z.string().min(1).optional(), replacement: managerSchema.optional() }).parse(input ?? {});
+    const project = (await this.repo.list()).find((p) => p.managerId === id);
+
+    if (project) {
+      if (!replacementId && !replacement) {
+        throw new AppError(`${existing.name} runs ${project.name}. Choose or create a new manager for it before deleting.`, 409);
+      }
+      if (replacementId === id) throw new AppError("Choose a different manager to take over", 400);
+      const next = replacementId
+        ? await this.resolveManager(replacementId, project.id)
+        : await this.managers.save({ ...replacement!, id: newId("mgr"), active: true });
+      await this.repo.save({ ...project, managerId: next?.id ?? null, adminName: next?.name ?? UNASSIGNED });
+    }
+    await this.managers.remove(id);
   }
 
   /** Edits a manager. Their project shows the new name straight away. */

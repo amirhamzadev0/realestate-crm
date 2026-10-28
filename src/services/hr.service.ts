@@ -5,6 +5,7 @@ import { AppError, notFound } from "@/utils/errors";
 import { addMonths } from "@/utils/date";
 import { formatDate } from "@/utils/format";
 import { newId, today } from "@/utils/id";
+import { withLock } from "@/utils/lock";
 
 export const workerSchema = z
   .object({
@@ -170,6 +171,10 @@ export class HrService {
   /** The Super Admin hands over one pending salary or task payment. The amount is the one calculated here, never the browser's. */
   async pay(input: unknown): Promise<PayrollItem> {
     const data = paySchema.parse(input);
+    return withLock(`pay:${data.workerId}:${data.kind}:${data.ref}`, () => this.payNow(data));
+  }
+
+  private async payNow(data: z.output<typeof paySchema>): Promise<PayrollItem> {
     if (!(await this.projects.findById(data.projectId))) throw notFound("Project");
     const item = (await this.pendingPayroll(data.projectId)).find(
       (i) => i.workerId === data.workerId && i.kind === data.kind && i.ref === data.ref,

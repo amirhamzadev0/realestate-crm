@@ -15,11 +15,17 @@ import type {
   SalesManager,
   SalesReport,
 } from "@/models/sales";
-import type { AccountRepository, ProjectRepository, SalesRepository } from "@/repositories/contracts";
+import type { AccountRepository, FinanceRepository, ProjectRepository, SalesRepository } from "@/repositories/contracts";
+import type { Installment } from "@/models/finance";
+import { buildPlan } from "@/utils/installments";
 import { AppError, notFound } from "@/utils/errors";
 import { newId, today } from "@/utils/id";
+import { withLock } from "@/utils/lock";
 import { addMonths } from "@/utils/date";
 import { discountProblem, priceUnit } from "@/utils/pricing";
+import { matchProject, matchSource } from "@/utils/lead-import";
+import { isOpenLead, isUnforwarded } from "@/utils/leads";
+import { canonicalPhone } from "@/utils/phone";
 
 export const leadStatusSchema = z.enum(["new", "contacted", "site-visit", "negotiation", "won", "lost"]);
 
@@ -47,9 +53,52 @@ export const assignLeadSchema = z.object({ leadId: z.string().min(1), agentId: z
 
 /** Leave `leadIds` out to share every unassigned lead; leave `agentIds` out to share among every active agent. */
 export const assignEquallySchema = z.object({
+  projectId: z.string().min(1).optional(), // share only the unassigned leads of this project
   leadIds: z.array(z.string().min(1)).optional(),
   agentIds: z.array(z.string().min(1)).optional(),
 });
+
+/** Every lead of a project goes to one agent. By default only the leads nobody has yet; `includeAssigned` takes the project's other open leads from their agents too. */
+export const assignProjectSchema = z.object({
+  projectId: z.string().min(1),
+  agentId: z.string().min(1),
+  includeAssigned: z.boolean().default(false),
+});
+
+// One request carries at most this many leads. A file can have any number: the upload screen sends it in parts of this size or less.
+/** What happens to an agent's open leads when the agent is removed: given to another agent, or put back in "not forwarded". */
+export const removeAgentSchema = z.object({
+  leads: z.enum(["transfer", "pool"]).optional(),
+  toAgentId: z.string().min(1).optional(),
+});
+
+export const MAX_IMPORT_LEADS = 1000;
+
+/** Leads read from an uploaded file. The project is named in the file (its name, address or id). */
+export const importLeadsSchema = z.object({
+  defaultSource: z.enum(["facebook", "instagram", "walk-in", "referral", "website"]).default("website"), // for rows that name no (known) source
+  leads: z
+    .array(
+      z.object({
+        line: z.number().int().optional(),
+        name: z.string(),
+        phone: z.string(),
+        project: z.string(),
+        source: z.string().optional(),
+        email: z.string().optional(),
+        note: z.string().optional(),
+      }),
+    )
+    .min(1, "The file has no leads")
+    .max(MAX_IMPORT_LEADS, `One request can carry at most ${MAX_IMPORT_LEADS} leads; send a bigger file in parts`),
+});
+
+export interface ImportLeadsResult {
+  imported: number;
+  duplicates: number; // already in the system (same phone in the same project) or repeated in the file
+  errors: { line: number; message: string }[]; // rows that could not be imported, with the reason
+  byProject: { projectId: string; projectName: string; count: number }[];
+}
 
 const phoneSchema = z.string().trim().regex(/^[0-9+\-\s()]{7,20}$/, "Enter a valid phone number");
 const emailSchema = z.string().trim().toLowerCase().email("Enter a valid email").max(254);
@@ -92,6 +141,18 @@ const fullSaleFields = {
   buyerPhone: phoneSchema,
   buyerCnic: cnicSchema,
   buyerEmail: emailSchema,
+  // Left out: the buyer pays everything now (cash). With a plan: a down payment now and the rest on instalments, and the unit is
+  // "booked" until every instalment is paid.
+  paymentPlan: z
+    .object({
+      downPaymentPercent: z.number().gt(0, "The down payment must be above 0%").lt(100, "The down payment must be below 100%"),
+      months: z.number().int().min(1).max(360),
+      dueDay: z.number().int().min(1).max(28),
+      balloonAmount: z.number().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+      balloonEveryMonths: z.number().int().min(1).max(120).optional(),
+      possessionAmount: z.number().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+    })
+    .optional(),
 };
 
 /** A sale the Super Admin makes without an agent, or a sales manager makes himself (`managerId`): no lead, no commission. */
@@ -127,6 +188,7 @@ export class SalesService {
     private repo: SalesRepository,
     private projects: ProjectRepository,
     private accounts: AccountRepository,
+    private finance?: FinanceRepository,
   ) {}
 
   listAgents(): Promise<Agent[]> {
@@ -234,10 +296,38 @@ export class SalesService {
     return this.repo.saveAgent({ ...existing, ...agentSchema.parse(input) });
   }
 
-  /** Agents are deactivated, not deleted, so past sales and commission stay intact. */
-  async removeAgent(id: string): Promise<void> {
-    const existing = await this.getAgent(id);
-    await this.repo.saveAgent({ ...existing, active: false });
+  /**
+   * Agents are deactivated, not deleted, so past sales and commission stay intact. An agent who still has open leads (not won and
+   * not lost) cannot just disappear with them: `leads: "transfer"` gives them to the active agent `toAgentId`, `leads: "pool"` puts
+   * them back in "not forwarded". Without a choice the removal is refused. Won and lost leads stay with the agent for the reports.
+   */
+  async removeAgent(id: string, input: unknown = {}): Promise<{ moved: number }> {
+    const choice = removeAgentSchema.parse(input ?? {});
+    return withLock(`agent:${id}`, async () => {
+      const existing = await this.getAgent(id);
+      const open = (await this.repo.listLeads()).filter((l) => l.agentId === id && isOpenLead(l));
+      if (open.length > 0) {
+        if (!choice.leads) {
+          throw new AppError(
+            `${existing.name} has ${open.length} open leads. Give them to another agent, or put them back in "Not forwarded", before removing ${existing.name}.`,
+            409,
+          );
+        }
+        if (choice.leads === "transfer") {
+          if (!choice.toAgentId) throw new AppError("Choose the agent who takes the leads", 400);
+          if (choice.toAgentId === id) throw new AppError("Choose a different agent to take the leads", 400);
+          const target = await this.activeAgent(choice.toAgentId);
+          for (const lead of open) await this.repo.saveLead({ ...lead, agentId: target.id, assignedAt: today() });
+        } else {
+          for (const lead of open) {
+            const { assignedAt: _old, ...rest } = lead;
+            await this.repo.saveLead({ ...rest, agentId: null });
+          }
+        }
+      }
+      await this.repo.saveAgent({ ...existing, active: false });
+      return { moved: open.length };
+    });
   }
 
   async addLead(input: unknown): Promise<Lead> {
@@ -254,6 +344,75 @@ export class SalesService {
       createdAt: today(),
       ...(data.agentId ? { assignedAt: today() } : {}),
     });
+  }
+
+  /**
+   * Adds the leads of an uploaded file in one go. Each row is checked on its own: a row with a problem (no name, an unknown
+   * project, a bad phone or email) is skipped and reported, and the rest are imported. A phone that is already a lead of the
+   * same project, or repeats earlier in the file, is counted as a duplicate and skipped. New leads have no agent yet.
+   */
+  async importLeads(input: unknown): Promise<ImportLeadsResult> {
+    const data = importLeadsSchema.parse(input);
+    const [projects, existing] = await Promise.all([this.projects.list(), this.repo.listLeads()]);
+    const digits = canonicalPhone; // the same phone written in different ways is one lead
+    const seen = new Set(existing.map((l) => `${l.projectId}|${digits(l.phone)}`));
+    const counts = new Map<string, number>();
+    const errors: ImportLeadsResult["errors"] = [];
+    let duplicates = 0;
+    let imported = 0;
+
+    for (const [index, row] of data.leads.entries()) {
+      const line = row.line ?? index + 2;
+      const fail = (message: string) => errors.push({ line, message });
+      const name = row.name.trim();
+      const phone = row.phone.trim();
+      const email = (row.email ?? "").trim().toLowerCase();
+      const project = matchProject(row.project, projects);
+      if (!name) { fail("The name is empty"); continue; }
+      if (name.length > 120) { fail("The name is too long"); continue; }
+      if (!/^[0-9+\-\s()]{7,20}$/.test(phone)) { fail(`"${phone}" is not a valid phone number`); continue; }
+      if (!project) { fail(row.project.trim() ? `There is no project called "${row.project.trim()}"` : "The project is empty"); continue; }
+      if (email && !z.string().email().max(254).safeParse(email).success) { fail(`"${email}" is not a valid email`); continue; }
+      const key = `${project.id}|${digits(phone)}`;
+      if (seen.has(key)) { duplicates++; continue; }
+      seen.add(key);
+
+      await this.repo.saveLead({
+        id: newId("l"),
+        name,
+        phone,
+        projectId: project.id,
+        source: matchSource(row.source) ?? data.defaultSource,
+        campaignId: null,
+        agentId: null,
+        status: "new",
+        createdAt: today(),
+        ...(email ? { email } : {}),
+        ...((row.note ?? "").trim() ? { note: (row.note ?? "").trim().slice(0, 500) } : {}),
+      });
+      imported++;
+      counts.set(project.id, (counts.get(project.id) ?? 0) + 1);
+    }
+    return {
+      imported,
+      duplicates,
+      errors,
+      byProject: projects.filter((p) => counts.has(p.id)).map((p) => ({ projectId: p.id, projectName: p.name, count: counts.get(p.id) ?? 0 })),
+    };
+  }
+
+  /** Gives every lead of a project to one agent ("all of project A to this agent"). Won and lost leads are left where they are. */
+  async assignProject(input: unknown): Promise<{ assigned: number; agentName: string }> {
+    const data = assignProjectSchema.parse(input);
+    if (!(await this.projects.findById(data.projectId))) throw notFound("Project");
+    const agent = await this.activeAgent(data.agentId);
+    const activeIds = new Set((await this.repo.listAgents()).filter((a) => a.active).map((a) => a.id));
+    const leads = (await this.repo.listLeads()).filter(
+      (l) => l.projectId === data.projectId && l.agentId !== agent.id && (data.includeAssigned ? isOpenLead(l) : isUnforwarded(l, activeIds)),
+    );
+    if (leads.length === 0) throw new AppError("This project has no leads to give", 409);
+    for (const lead of leads) await this.repo.saveLead({ ...lead, agentId: agent.id, assignedAt: today() });
+    return { assigned: leads.length, agentName: agent.name };
   }
 
   private async activeAgent(id: string): Promise<Agent> {
@@ -380,8 +539,9 @@ export class SalesService {
       .filter((a) => a.active && (!data.agentIds || data.agentIds.includes(a.id)))
       .sort((a, b) => a.name.localeCompare(b.name));
     if (agents.length === 0) throw new AppError("There is no active agent to give leads to", 409);
+    const activeIds = new Set(allAgents.filter((a) => a.active).map((a) => a.id));
     const toShare = leads
-      .filter((l) => (data.leadIds ? data.leadIds.includes(l.id) : l.agentId === null))
+      .filter((l) => (data.leadIds ? data.leadIds.includes(l.id) : isUnforwarded(l, activeIds)) && (!data.projectId || l.projectId === data.projectId))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     if (toShare.length === 0) throw new AppError("There are no leads to share", 409);
 
@@ -404,7 +564,17 @@ export class SalesService {
   }
 
   /** Records an agent's sale and marks the originating lead as won. */
+  /** Sales in one project are made one at a time, so the same unit can never be sold (and credited) twice by two requests arriving together. */
+  private sellingLock<T>(input: unknown, work: () => Promise<T>): Promise<T> {
+    const projectId = (input as { projectId?: unknown } | null)?.projectId;
+    return typeof projectId === "string" ? withLock(`sale:${projectId}`, work) : work();
+  }
+
   async recordSale(input: unknown): Promise<Sale> {
+    return this.sellingLock(input, () => this.recordSaleNow(input));
+  }
+
+  private async recordSaleNow(input: unknown): Promise<Sale> {
     const data = saleSchema.parse(input);
     if (data.agentId) {
       const agent = (await this.repo.listAgents()).find((a) => a.id === data.agentId);
@@ -421,6 +591,10 @@ export class SalesService {
 
   /** A direct sale: the Super Admin, or a sales manager (`managerId`), sells a unit straight to a buyer, with a discount if they give one. */
   async recordDirectSale(input: unknown): Promise<Sale> {
+    return this.sellingLock(input, () => this.recordDirectSaleNow(input));
+  }
+
+  private async recordDirectSaleNow(input: unknown): Promise<Sale> {
     const data = directSaleSchema.parse(input);
     if (data.managerId) {
       const manager = (await this.repo.listSalesManagers()).find((m) => m.id === data.managerId);
@@ -435,6 +609,10 @@ export class SalesService {
    * of their leads, that lead becomes "won". `onlyAgentId` limits it to that agent (an agent cannot sell as someone else).
    */
   async recordAgentSale(input: unknown, onlyAgentId?: string): Promise<Sale> {
+    return this.sellingLock(input, () => this.recordAgentSaleNow(input, onlyAgentId));
+  }
+
+  private async recordAgentSaleNow(input: unknown, onlyAgentId?: string): Promise<Sale> {
     const data = agentSaleSchema.parse(input);
     if (onlyAgentId && data.agentId !== onlyAgentId) throw new AppError("You can only sell your own leads", 403);
     const agent = await this.activeAgent(data.agentId);
@@ -676,6 +854,12 @@ export class SalesService {
     const priced = priceUnit(area, rate, mode, value);
     if (priced.price <= 0) throw new AppError("The price after the discount must be above zero", 400);
 
+    // On instalments, the buyer pays the down payment now; the rest follows the plan.
+    const planInput = "paymentPlan" in data ? data.paymentPlan : undefined;
+    const plan = planInput ? buildPlan(priced.price, planInput, today()) : null;
+    if (plan && "problem" in plan) throw new AppError(plan.problem, 400);
+    if (plan && !this.finance) throw new AppError("Instalment plans are not available", 409);
+
     if (leadId && !(await this.repo.setLeadStatus(leadId, "won"))) throw new AppError("Lead not found", 404);
 
     const sale = await this.repo.saveSale({
@@ -698,6 +882,7 @@ export class SalesService {
         ? { discountMode: mode, discountValue: value, discountAmount: priced.discountAmount }
         : {}),
       price: priced.price,
+      ...(plan ? { paymentType: "installment" as const, status: "booked" as const } : {}),
       date: today(),
     });
     await this.accounts.add({
@@ -705,12 +890,27 @@ export class SalesService {
       projectId: project.id,
       date: sale.date,
       type: "sale",
-      amount: priced.price,
-      description: `Sale of ${highRise ? `unit ${unitName}, floor ${floor}` : `plot ${unitName}`} (${data.category})${
+      amount: plan ? plan.down : priced.price,
+      description: `${plan ? "Down payment for the sale" : "Sale"} of ${highRise ? `unit ${unitName}, floor ${floor}` : `plot ${unitName}`} (${data.category})${
         priced.discountAmount > 0 ? `, ${priced.discountAmount} discount` : ""
       }`,
       party: data.buyer,
     });
+    if (plan && this.finance) {
+      const items: Installment[] = plan.items.map((item, index) => ({
+        id: newId("in"),
+        saleId: sale.id,
+        projectId: project.id,
+        seq: index + 1,
+        kind: item.kind,
+        amount: item.amount,
+        dueDate: item.dueDate,
+        paid: item.kind === "booking" ? item.amount : 0,
+        ...(item.kind === "booking" ? { paidAt: sale.date, payments: [{ date: sale.date, amount: item.amount }] } : {}),
+        contacts: [],
+      }));
+      await this.finance.saveAll(items);
+    }
     return sale;
   }
 

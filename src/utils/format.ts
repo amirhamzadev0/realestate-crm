@@ -1,3 +1,4 @@
+import { whatsappDigits } from "@/utils/phone";
 const money = new Intl.NumberFormat("en-PK", { style: "currency", currency: "PKR", maximumFractionDigits: 0 });
 const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 
@@ -10,14 +11,14 @@ export function formatDate(iso: string): string {
   return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
 }
 
-export const phoneHref = (phone: string) => `tel:${phone.replace(/[^+\d]/g, "")}`;
+export const phoneHref = (phone: string) => {
+  const raw = phone.replace(/[^+\d]/g, "");
+  return `tel:${/^3\d{9}$/.test(raw) ? `0${raw}` : raw}`; // Excel drops the leading 0 of a mobile number
+};
 
 /** A number for wa.me: digits only, with the country code. "0333-1000001" -> "923331000001" (Pakistan). */
 export function whatsappNumber(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.startsWith("00")) return digits.slice(2);
-  if (digits.startsWith("0")) return `92${digits.slice(1)}`;
-  return digits;
+  return whatsappDigits(phone);
 }
 
 /** "2026-10" -> "Oct 2026". */

@@ -19,7 +19,7 @@ export default async function AgentPortalPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ notify?: string; lead?: string }>;
+  searchParams: Promise<{ notify?: string; lead?: string; page?: string; q?: string }>;
 }) {
   const portal = await getAgentPortal((await params).id);
   if (!portal) notFound();
@@ -38,6 +38,25 @@ export default async function AgentPortalPage({
     else if (leads.some((l) => l.id === query.lead)) highlighted.set(query.lead, null);
   }
   const firstHighlighted = leads.find((l) => highlighted.has(l.id))?.id;
+
+  // A big list is shown a page at a time (the highlighted clients first), and can be searched.
+  const PAGE_SIZE = 50;
+  const needle = (query.q ?? "").trim().toLowerCase();
+  const digits = needle.replace(/\D/g, "");
+  const matching = leads.filter((l) => !needle || l.name.toLowerCase().includes(needle) || (digits !== "" && l.phone.replace(/\D/g, "").includes(digits)));
+  const ordered = [...matching.filter((l) => highlighted.has(l.id)), ...matching.filter((l) => !highlighted.has(l.id))];
+  const pages = Math.max(1, Math.ceil(ordered.length / PAGE_SIZE));
+  const page = Math.min(Math.max(Number(query.page) || 1, 1), pages);
+  const shown = ordered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pageLink = (n: number) => {
+    const params = new URLSearchParams();
+    if (query.q) params.set("q", query.q);
+    if (query.notify) params.set("notify", query.notify);
+    if (query.lead) params.set("lead", query.lead);
+    if (n > 1) params.set("page", String(n));
+    const text = params.toString();
+    return `/agent/${agent.id}${text ? `?${text}` : ""}`;
+  };
 
   return (
     <>
@@ -72,15 +91,33 @@ export default async function AgentPortalPage({
       ) : null}
       {firstHighlighted ? <ScrollToHighlight /> : null}
       <Card
-        title="My leads (click a phone number to message or call; press Sell when the client buys)"
+        title={`My leads (${ordered.length}${needle ? " found" : ""}; click a phone number to message or call, press Sell when the client buys)`}
         action={
           <Link href={`/agent/${agent.id}/sell`} className="button button--small">
             Sell a unit
           </Link>
         }
       >
+        {leads.length > PAGE_SIZE || needle ? (
+          <form className="inline-form" method="get">
+            <label className="field">
+              <span className="field__label">Search my leads</span>
+              <input name="q" type="search" defaultValue={query.q ?? ""} placeholder="Name or phone" />
+            </label>
+            <button type="submit" className="button button--small">
+              Search
+            </button>
+            {query.q ? (
+              <Link href={`/agent/${agent.id}`} className="button button--ghost button--small">
+                Clear
+              </Link>
+            ) : null}
+          </form>
+        ) : null}
         {leads.length === 0 ? (
           <EmptyState>No leads assigned to you yet.</EmptyState>
+        ) : ordered.length === 0 ? (
+          <EmptyState>No lead matches your search.</EmptyState>
         ) : (
           <div className="table-wrap">
             <table className="table">
@@ -96,7 +133,7 @@ export default async function AgentPortalPage({
                 </tr>
               </thead>
               <tbody>
-                {leads.map((lead) => (
+                {shown.map((lead) => (
                   <tr key={lead.id} id={`lead-${lead.id}`} className={highlighted.has(lead.id) ? "lead-row--highlight" : undefined}>
                     <td>{formatDate(lead.assignedAt ?? lead.createdAt)}</td>
                     <td>
@@ -155,6 +192,23 @@ export default async function AgentPortalPage({
             </table>
           </div>
         )}
+        {pages > 1 ? (
+          <nav className="row-actions" aria-label="Pages of leads">
+            {page > 1 ? (
+              <Link href={pageLink(page - 1)} className="button button--ghost button--small">
+                Previous
+              </Link>
+            ) : null}
+            <span className="muted">
+              Page {page} of {pages}
+            </span>
+            {page < pages ? (
+              <Link href={pageLink(page + 1)} className="button button--ghost button--small">
+                Next
+              </Link>
+            ) : null}
+          </nav>
+        ) : null}
       </Card>
 
       <Card title="My sales and commission">

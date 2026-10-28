@@ -18,6 +18,7 @@ import site from "@/data/mock/site.json";
 import stock from "@/data/mock/stock.json";
 import workers from "@/data/mock/workers.json";
 import type { AccountEntry } from "@/models/accounts";
+import type { Installment } from "@/models/finance";
 import type { ChangeRequest } from "@/models/changes";
 import type { Manager } from "@/models/manager";
 import type { Material, MaterialRequest, StockItem } from "@/models/inventory";
@@ -45,6 +46,7 @@ export interface MockStore {
   leadContacts: LeadContact[];
   monthlyReports: MonthlyReportSnapshot[];
   sales: Sale[];
+  installments: Installment[];
   changeRequests: ChangeRequest[];
 }
 
@@ -77,6 +79,7 @@ export function getStore(): MockStore {
     leadContacts,
     monthlyReports,
     sales,
+    installments: [],
     changeRequests,
   }) as unknown as MockStore;
   return g[KEY];

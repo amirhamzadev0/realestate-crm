@@ -22,4 +22,8 @@ export class MysqlManagerRepository implements ManagerRepository {
     );
     return manager;
   }
+  /** A project the manager ran keeps existing: its manager column is cleared by the foreign key. */
+  async remove(id: string) {
+    return (await run("DELETE FROM managers WHERE id = ?", [id])).affectedRows > 0;
+  }
 }

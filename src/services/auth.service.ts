@@ -71,6 +71,8 @@ export class AuthService {
         return "/superadmin";
       case "warehouse":
         return "/warehouse";
+      case "finance":
+        return "/finance";
       case "sales":
         return "/sales";
       case "agent":

@@ -153,7 +153,7 @@ export async function DirectSalesPanel({
                         <td>{u.unit}</td>
                         <td className="num">{formatNumber(u.area)}</td>
                         <td>
-                          <Badge tone={u.sale ? "danger" : "success"}>{u.sale ? "sold" : "available"}</Badge>
+                          <Badge tone={u.sale ? (u.sale.status === "booked" ? "warning" : "danger") : "success"}>{u.sale ? (u.sale.status === "booked" ? "booked" : "sold") : "available"}</Badge>
                         </td>
                         {asAgent ? null : <td>{u.sale ? formatDate(u.sale.date) : "-"}</td>}
                         {asAgent ? null : <td className="num">{u.sale ? formatMoney(u.sale.price) : "-"}</td>}

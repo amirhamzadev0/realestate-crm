@@ -1,8 +1,9 @@
 import { z } from "zod";
-import type { Material, MaterialRequest, MaterialRequestView, RequestStatus, StockItem, StockView } from "@/models/inventory";
+import type { Delivery, Material, OrderPayment, MaterialRequest, MaterialRequestView, RequestStatus, StockItem, StockView } from "@/models/inventory";
 import type { AccountRepository, InventoryRepository, ProjectRepository } from "@/repositories/contracts";
 import { AppError, notFound } from "@/utils/errors";
 import { newId, today } from "@/utils/id";
+import { withLock } from "@/utils/lock";
 
 export const materialRequestSchema = z.object({
   projectId: z.string().min(1),
@@ -66,6 +67,21 @@ export const newMaterialSchema = z.object({
   unit: z.string().trim().min(1).max(20),
 });
 
+export const receiveSchema = z.object({
+  requestId: z.string().min(1),
+  quantity: z.number().positive().max(10_000_000).optional(), // defaults to everything still to come
+});
+
+/** How much of an order has arrived. Orders closed before deliveries were recorded count as fully received. */
+function receivedOf(request: MaterialRequest): { receivedQuantity: number; remainingQuantity: number } {
+  const received = request.deliveries
+    ? request.deliveries.reduce((sum, d) => sum + d.quantity, 0)
+    : request.status === "fulfilled"
+      ? request.quantity
+      : 0;
+  return { receivedQuantity: received, remainingQuantity: Math.max(0, request.quantity - received) };
+}
+
 /**
  * Material has no central stock. A project manager asks the Super Admin; approving the request places the order, or the
  * Super Admin orders directly. When the material arrives it is marked received and goes into the project's inventory.
@@ -116,6 +132,7 @@ export class InventoryService {
       materialName: materialById.get(r.materialId)?.name ?? "Unknown",
       unit: materialById.get(r.materialId)?.unit ?? "",
       projectName: projectById.get(r.projectId)?.name ?? "Unknown",
+      ...receivedOf(r),
       balanceDue: Math.max(0, (r.totalAmount ?? 0) - (r.amountPaid ?? 0)),
     }));
   }
@@ -138,7 +155,7 @@ export class InventoryService {
    * Places the order: records the vendor, amount and payment terms, and debits any advance from the project's accounts.
    * Returns the order fields to save on the request.
    */
-  private async placeOrder(request: MaterialRequest, details: OrderDetails): Promise<Pick<MaterialRequest, "status" | "orderedAt" | "vendor" | "totalAmount" | "paymentTerms" | "amountPaid">> {
+  private async placeOrder(request: MaterialRequest, details: OrderDetails): Promise<Pick<MaterialRequest, "status" | "orderedAt" | "vendor" | "totalAmount" | "paymentTerms" | "amountPaid" | "payments">> {
     const orderedAt = details.orderDate ?? today();
     const advance = details.paymentTerms === "advance" ? (details.advanceAmount ?? 0) : 0;
     if (advance > 0) {
@@ -151,6 +168,7 @@ export class InventoryService {
       totalAmount: details.totalAmount,
       paymentTerms: details.paymentTerms,
       amountPaid: advance,
+      payments: advance > 0 ? [{ date: orderedAt, amount: advance }] : [],
     };
   }
 
@@ -174,6 +192,10 @@ export class InventoryService {
   /** Super Admin rejects a pending request, or approves it, which places the order with its vendor, amount and payment terms. */
   async decide(input: unknown): Promise<MaterialRequest> {
     const data = decisionSchema.parse(input);
+    return withLock(`order:${data.requestId}`, () => this.decideNow(data, input));
+  }
+
+  private async decideNow(data: z.output<typeof decisionSchema>, input: unknown): Promise<MaterialRequest> {
     const request = await this.getRequest(data.requestId);
     if (request.status !== "pending") throw new AppError("Request was already decided", 409);
     const now = today();
@@ -206,25 +228,41 @@ export class InventoryService {
   }
 
   /**
-   * The ordered material has arrived: it goes into the project's inventory and the order is closed. Whatever is still
-   * unpaid is then due to the vendor (see `payOrder`).
+   * Some or all of the ordered material has arrived: it goes into the project's inventory. `quantity` is what arrived
+   * this time (default: everything still to come). The order stays "ordered" until the last of it has arrived, then it
+   * is closed. Whatever is still unpaid is then due to the vendor (see `payOrder`).
    * `projectId` limits the check to one project (a project manager can only receive their own orders).
    */
-  async receive(requestId: string, projectId?: string): Promise<MaterialRequest> {
-    const request = await this.getRequest(requestId);
+  async receive(input: unknown, projectId?: string): Promise<MaterialRequest> {
+    const data = receiveSchema.parse(input);
+    return withLock(`order:${data.requestId}`, () => this.receiveNow(data, projectId));
+  }
+
+  private async receiveNow(data: z.output<typeof receiveSchema>, projectId?: string): Promise<MaterialRequest> {
+    const request = await this.getRequest(data.requestId);
     if (projectId && request.projectId !== projectId) throw notFound("Request");
     if (request.status !== "ordered") throw new AppError("Only an order that is on its way can be marked received", 409);
 
-    const stock = (await this.repo.findStock(request.projectId, request.materialId)) ?? {
-      id: newId("s"),
-      projectId: request.projectId,
-      materialId: request.materialId,
-      quantity: 0,
-      used: 0,
-      minLevel: 0,
-    };
-    await this.repo.saveStock({ ...stock, quantity: stock.quantity + request.quantity });
-    return this.repo.saveRequest({ ...request, status: "fulfilled", receivedAt: today() });
+    const { remainingQuantity } = receivedOf(request);
+    const quantity = data.quantity ?? remainingQuantity;
+    if (quantity > remainingQuantity) throw new AppError(`Only ${remainingQuantity} is still to come on this order`, 400);
+
+    // Two orders of the same material for one project can arrive together: the stock line is changed one at a time.
+    await withLock(`stock:${request.projectId}:${request.materialId}`, async () => {
+      const stock = (await this.repo.findStock(request.projectId, request.materialId)) ?? {
+        id: newId("s"),
+        projectId: request.projectId,
+        materialId: request.materialId,
+        quantity: 0,
+        used: 0,
+        minLevel: 0,
+      };
+      await this.repo.saveStock({ ...stock, quantity: stock.quantity + quantity });
+    });
+    const now = today();
+    const deliveries: Delivery[] = [...(request.deliveries ?? []), { date: now, quantity }];
+    const complete = quantity === remainingQuantity;
+    return this.repo.saveRequest({ ...request, deliveries, ...(complete ? { status: "fulfilled" as const, receivedAt: now } : {}) });
   }
 
   /** Orders that arrived and still have money owed to the vendor. */
@@ -235,6 +273,10 @@ export class InventoryService {
   /** The Super Admin sends the vendor the rest of the money (all of it, or `amount`). It is debited from the project's accounts. */
   async payOrder(input: unknown): Promise<MaterialRequest> {
     const data = payOrderSchema.parse(input);
+    return withLock(`order:${data.requestId}`, () => this.payNow(data));
+  }
+
+  private async payNow(data: z.output<typeof payOrderSchema>): Promise<MaterialRequest> {
     const request = await this.getRequest(data.requestId);
     if (request.totalAmount === undefined || !request.vendor) throw new AppError("This order has no amount to pay", 409);
     if (request.status !== "fulfilled") throw new AppError("Pay the balance after the material has been delivered", 409);
@@ -246,7 +288,8 @@ export class InventoryService {
     const now = today();
     await this.debit(request, amount, now, `${amount === balance ? "Balance" : "Part payment"} for ${await this.materialName(request)} order`, request.vendor);
     const paid = (request.amountPaid ?? 0) + amount;
-    return this.repo.saveRequest({ ...request, amountPaid: paid, ...(paid >= request.totalAmount ? { paidAt: now } : {}) });
+    const payments: OrderPayment[] = [...(request.payments ?? []), { date: now, amount }];
+    return this.repo.saveRequest({ ...request, amountPaid: paid, payments, ...(paid >= request.totalAmount ? { paidAt: now } : {}) });
   }
 
   /**
@@ -255,6 +298,10 @@ export class InventoryService {
    */
   async rejectRequest(input: unknown): Promise<MaterialRequest> {
     const data = z.object({ requestId: z.string().min(1), note: z.string().trim().max(500).default("") }).parse(input);
+    return withLock(`order:${data.requestId}`, () => this.rejectNow(data));
+  }
+
+  private async rejectNow(data: { requestId: string; note: string }): Promise<MaterialRequest> {
     const request = await this.getRequest(data.requestId);
     if (request.status !== "pending" && request.status !== "ordered") {
       throw new AppError("Only a pending request or an order that has not arrived can be rejected", 409);
@@ -272,9 +319,11 @@ export class InventoryService {
   /** Material consumed on site. */
   async recordUsage(input: unknown): Promise<StockItem> {
     const data = usageSchema.parse(input);
-    const stock = await this.repo.findStock(data.projectId, data.materialId);
-    if (!stock) throw notFound("Stock item");
-    if (stock.quantity < data.quantity) throw new AppError("Not enough stock on site", 409);
-    return this.repo.saveStock({ ...stock, quantity: stock.quantity - data.quantity, used: stock.used + data.quantity });
+    return withLock(`stock:${data.projectId}:${data.materialId}`, async () => {
+      const stock = await this.repo.findStock(data.projectId, data.materialId);
+      if (!stock) throw notFound("Stock item");
+      if (stock.quantity < data.quantity) throw new AppError("Not enough stock on site", 409);
+      return this.repo.saveStock({ ...stock, quantity: stock.quantity - data.quantity, used: stock.used + data.quantity });
+    });
   }
 }

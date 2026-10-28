@@ -28,6 +28,18 @@ export type RequestStatus = "pending" | "ordered" | "rejected" | "fulfilled";
 /** How an order is paid: part of it up front, or all of it when the material is delivered. */
 export type PaymentTerms = "advance" | "on-delivery";
 
+/** One part of an order arriving at the project. */
+export interface Delivery {
+  date: string; // ISO date
+  quantity: number;
+}
+
+/** One payment to the vendor of an order. */
+export interface OrderPayment {
+  date: string; // ISO date
+  amount: number;
+}
+
 /** A project's material request, or an order the Super Admin placed directly. */
 export interface MaterialRequest {
   id: string;
@@ -41,7 +53,9 @@ export interface MaterialRequest {
   decisionNote?: string;
   decidedAt?: string;
   orderedAt?: string; // the day the order was placed
-  receivedAt?: string; // when the material arrived
+  receivedAt?: string; // when the last of the material arrived (the order is then fulfilled)
+  payments?: OrderPayment[]; // each payment to the vendor, oldest first
+  deliveries?: Delivery[]; // the parts that have arrived so far, oldest first
   // Order details, set when the order is placed. Payments are debited from the project's accounts.
   vendor?: string;
   totalAmount?: number; // PKR the material costs
@@ -60,5 +74,7 @@ export interface MaterialRequestView extends MaterialRequest {
   materialName: string;
   unit: string;
   projectName: string;
+  receivedQuantity: number; // how much has arrived so far
+  remainingQuantity: number; // how much is still to come
   balanceDue: number; // totalAmount - amountPaid, 0 when the order has no amount
 }

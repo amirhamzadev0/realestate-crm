@@ -3,6 +3,7 @@ import type { ChangeRequest, ChangeRequestView, ChangeStatus } from "@/models/ch
 import type { ChangeRequestRepository, ProjectRepository } from "@/repositories/contracts";
 import { AppError, notFound } from "@/utils/errors";
 import { formatMoney } from "@/utils/format";
+import { withLock } from "@/utils/lock";
 import { newId, today } from "@/utils/id";
 import { workerSchema, type HrService } from "./hr.service";
 import { agentSchema, type SalesService } from "./sales.service";
@@ -111,6 +112,10 @@ export class ChangeRequestService {
   /** Super Admin decision. Approving applies the change. */
   async decide(input: unknown): Promise<ChangeRequest> {
     const data = changeDecisionSchema.parse(input);
+    return withLock(`change:${data.requestId}`, () => this.decideNow(data));
+  }
+
+  private async decideNow(data: z.output<typeof changeDecisionSchema>): Promise<ChangeRequest> {
     const request = await this.repo.find(data.requestId);
     if (!request) throw notFound("Request");
     if (request.status !== "pending") throw new AppError("Request was already decided", 409);
@@ -129,7 +134,8 @@ export class ChangeRequestService {
     } else {
       if (request.action === "add") await this.sales.addAgent(payload);
       else if (request.action === "edit") await this.sales.updateAgent(target, payload);
-      else await this.sales.removeAgent(target);
+      // An approved removal puts the agent's open leads back in "not forwarded", so none is lost.
+      else await this.sales.removeAgent(target, { leads: "pool" });
     }
   }
 }

@@ -8,13 +8,13 @@ import { getAgentsPage } from "@/viewmodels/sales.viewmodel";
 export const metadata: Metadata = { title: "Agents" };
 
 export default async function AgentsPage() {
-  const { performance, agents, managers } = await getAgentsPage();
+  const { performance, agents, managers, openLeads } = await getAgentsPage();
 
   return (
     <>
       <PageHeader title="Agents" subtitle="Create your agents, see the leads they handle and the commission they earn. Each agent has their own portal." />
       <Card title="Team">
-        <AgentManageTable agents={agents} performance={performance} managers={managers} />
+        <AgentManageTable agents={agents} performance={performance} managers={managers} openLeads={openLeads} />
       </Card>
       <Card title="Create a new agent">
         {managers.length === 0 ? (

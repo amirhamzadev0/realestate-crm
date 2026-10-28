@@ -10,7 +10,7 @@ const fileSchema = z.array(
     id: z.string().min(1),
     email: z.string().email(),
     name: z.string().min(1),
-    role: z.enum(["superadmin", "project-admin", "warehouse", "sales", "agent"]),
+    role: z.enum(["superadmin", "project-admin", "warehouse", "sales", "agent", "finance"]),
     projectId: z.string().nullable(),
     agentId: z.string().nullable().default(null),
     passwordHash: z.string().min(1),

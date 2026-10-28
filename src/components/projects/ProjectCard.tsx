@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/Badge";
 import type { AccountSummary } from "@/models/accounts";
 import type { HrSummary } from "@/models/hr";
 import { categoryLabels, saleUnit, type Project } from "@/models/project";
-import { formatCompactMoney } from "@/utils/format";
+import { formatCompactMoney, formatNumber } from "@/utils/format";
 
 export function ProjectCard({
   project,
@@ -60,6 +60,14 @@ export function ProjectCard({
             <dt>Units left</dt>
             <dd>
               {Math.max(0, project.totalUnits - unitsSold)} / {project.totalUnits}
+            </dd>
+          </div>
+        ) : null}
+        {project.totalArea > 0 ? (
+          <div>
+            <dt>Total area</dt>
+            <dd>
+              {formatNumber(project.totalArea)} {saleUnit[project.type].area}
             </dd>
           </div>
         ) : null}

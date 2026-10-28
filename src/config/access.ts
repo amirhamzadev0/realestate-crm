@@ -4,6 +4,7 @@ import type { NavItem, Role } from "@/models/site";
 const portalAccess: { prefix: string; roles: Role[] }[] = [
   { prefix: "/superadmin", roles: ["superadmin"] },
   { prefix: "/warehouse", roles: ["superadmin", "warehouse"] },
+  { prefix: "/finance", roles: ["superadmin", "finance"] },
   { prefix: "/sales", roles: ["superadmin", "sales"] },
   { prefix: "/agent", roles: ["superadmin", "sales", "agent"] },
   { prefix: "/projects", roles: ["superadmin", "project-admin"] },
@@ -25,4 +26,5 @@ export const roleLabels: Record<Role, string> = {
   warehouse: "Orders desk",
   sales: "Sales Manager",
   agent: "Agent",
+  finance: "Finance",
 };

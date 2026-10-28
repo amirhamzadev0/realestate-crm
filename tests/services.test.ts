@@ -17,6 +17,8 @@ import { SalesService } from "@/services/sales.service";
 import { MockManagerRepository } from "@/repositories/mock/manager.repository";
 import { addMonths } from "@/utils/date";
 import { today } from "@/utils/id";
+import { readLeadRows } from "@/utils/lead-import";
+import { orderEvents, sortEvents } from "@/utils/order-events";
 
 const projects = new MockProjectRepository();
 const projectService = new ProjectService(projects, new MockManagerRepository(), new MockSalesRepository());
@@ -60,18 +62,18 @@ describe("material workflow", () => {
     const before = await siteQty("p2", "m2");
     const request = await inventory.createRequest({ projectId: "p2", materialId: "m2", quantity: 500, requestedBy: "Sana" });
     assert.equal(request.status, "pending");
-    await assert.rejects(inventory.receive(request.id), /on its way/); // nothing to receive before it is ordered
+    await assert.rejects(inventory.receive({ requestId: request.id }), /on its way/); // nothing to receive before it is ordered
 
     const ordered = await inventory.decide({ requestId: request.id, decision: "approved", ...ORDER });
     assert.equal(ordered.status, "ordered");
     assert.equal(ordered.orderedAt, today());
     assert.equal(await siteQty("p2", "m2"), before); // ordered is not delivered: the inventory has not changed yet
 
-    const received = await inventory.receive(request.id);
+    const received = await inventory.receive({ requestId: request.id });
     assert.equal(received.status, "fulfilled");
     assert.equal(received.receivedAt, today());
     assert.equal(await siteQty("p2", "m2"), before + 500);
-    await assert.rejects(inventory.receive(request.id), /on its way/); // cannot be received twice
+    await assert.rejects(inventory.receive({ requestId: request.id }), /on its way/); // cannot be received twice
     await assert.rejects(inventory.decide({ requestId: request.id, decision: "rejected" }), /already decided/);
   });
 
@@ -82,7 +84,7 @@ describe("material workflow", () => {
     assert.equal(rejected.status, "rejected");
     assert.equal(rejected.decisionNote, "Budget exceeded");
     assert.equal(await siteQty("p1", "m2"), before);
-    await assert.rejects(inventory.receive(request.id), /on its way/);
+    await assert.rejects(inventory.receive({ requestId: request.id }), /on its way/);
   });
 
   it("the Super Admin can order for a project directly, and it is recorded as an order", async () => {
@@ -92,16 +94,45 @@ describe("material workflow", () => {
     assert.equal(order.requestedBy, "Super Admin (ordered directly)");
     assert.equal((await inventory.listRequests({ projectId: "p3", status: "ordered" })).some((r) => r.id === order.id), true);
     assert.equal(await siteQty("p3", "m1"), before);
-    await inventory.receive(order.id);
+    await inventory.receive({ requestId: order.id });
     assert.equal(await siteQty("p3", "m1"), before + 40); // a first delivery creates the stock line
     await assert.rejects(inventory.orderDirect({ ...ORDER, projectId: "nope", materialId: "m1", quantity: 1 }), /Project not found/);
     await assert.rejects(inventory.orderDirect({ ...ORDER, projectId: "p3", materialId: "nope", quantity: 1 }), /Material not found/);
   });
 
+  it("an order can arrive in parts and closes when the last part arrives", async () => {
+    const order = await inventory.orderDirect({ ...ORDER, projectId: "p1", materialId: "m4", quantity: 100 });
+    const before = await siteQty("p1", "m4");
+    const first = await inventory.receive({ requestId: order.id, quantity: 40 });
+    assert.equal(first.status, "ordered"); // still on its way
+    assert.equal(await siteQty("p1", "m4"), before + 40);
+    const view = (await inventory.listRequests({ projectId: "p1" })).find((r) => r.id === order.id)!;
+    assert.equal(view.receivedQuantity, 40);
+    assert.equal(view.remainingQuantity, 60);
+    await assert.rejects(inventory.receive({ requestId: order.id, quantity: 61 }), /Only 60 is still to come/);
+    await assert.rejects(inventory.receive({ requestId: order.id, quantity: 0 }));
+    const second = await inventory.receive({ requestId: order.id, quantity: 25 });
+    assert.equal(second.status, "ordered");
+    const last = await inventory.receive({ requestId: order.id }); // the rest
+    assert.equal(last.status, "fulfilled");
+    assert.deepEqual(last.deliveries?.map((d) => d.quantity), [40, 25, 35]);
+    assert.equal(await siteQty("p1", "m4"), before + 100);
+  });
+
+  it("an order shows in the month it was placed and again in the months it was delivered and paid", async () => {
+    const order = await inventory.orderDirect({ ...ORDER, projectId: "p1", materialId: "m4", quantity: 10, orderDate: "2026-09-29", paymentTerms: "advance", advanceAmount: 100 });
+    await inventory.receive({ requestId: order.id });
+    await inventory.payOrder({ requestId: order.id });
+    const view = (await inventory.listRequests({ projectId: "p1" })).find((r) => r.id === order.id)!;
+    const events = sortEvents(orderEvents(view)).map((e) => `${e.kind}@${e.date.slice(0, 7)}`);
+    assert.deepEqual(events, [`ordered@2026-09`, `paid@2026-09`, `delivered@${today().slice(0, 7)}`, `paid@${today().slice(0, 7)}`]);
+    assert.match(orderEvents(view).find((e) => e.kind === "paid" && e.date !== "2026-09-29")!.text, /paid in full/);
+  });
+
   it("a delivery is only accepted for the project it belongs to", async () => {
     const order = await inventory.orderDirect({ ...ORDER, projectId: "p1", materialId: "m4", quantity: 1000 });
-    await assert.rejects(inventory.receive(order.id, "p2"), /Request not found/); // another project's manager
-    assert.equal((await inventory.receive(order.id, "p1")).status, "fulfilled");
+    await assert.rejects(inventory.receive({ requestId: order.id }, "p2"), /Request not found/); // another project's manager
+    assert.equal((await inventory.receive({ requestId: order.id }, "p1")).status, "fulfilled");
   });
 
   it("the Super Admin can cancel an order that has not arrived, but not one that has", async () => {
@@ -110,10 +141,10 @@ describe("material workflow", () => {
     const cancelled = await inventory.rejectRequest({ requestId: order.id });
     assert.equal(cancelled.status, "rejected");
     assert.equal(cancelled.decisionNote, "Order cancelled");
-    await assert.rejects(inventory.receive(order.id), /on its way/);
+    await assert.rejects(inventory.receive({ requestId: order.id }), /on its way/);
 
     const delivered = await inventory.orderDirect({ ...ORDER, projectId: "p1", materialId: "m5", quantity: 100 });
-    await inventory.receive(delivered.id);
+    await inventory.receive({ requestId: delivered.id });
     await assert.rejects(inventory.rejectRequest({ requestId: delivered.id }), /Only a pending request or an order/);
     assert.equal(await siteQty("p1", "m5"), before + 100);
   });
@@ -144,7 +175,7 @@ describe("material workflow", () => {
     assert.equal((await entries()).length, before);
     assert.equal((await inventory.paymentsDue()).some((r) => r.id === order.id), false); // not delivered yet
 
-    await inventory.receive(order.id);
+    await inventory.receive({ requestId: order.id });
     const due = (await inventory.paymentsDue()).find((r) => r.id === order.id)!;
     assert.equal(due.balanceDue, 120_000);
 
@@ -171,7 +202,7 @@ describe("material workflow", () => {
     assert.equal((await summary()).balance, start - 200_000); // debited straight away
 
     await assert.rejects(inventory.payOrder({ requestId: order.id }), /after the material has been delivered/);
-    await inventory.receive(order.id);
+    await inventory.receive({ requestId: order.id });
     assert.equal((await inventory.paymentsDue()).find((r) => r.id === order.id)!.balanceDue, 300_000);
 
     await assert.rejects(inventory.payOrder({ requestId: order.id, amount: 300_001 }), /Only 300000 is left/);
@@ -199,7 +230,7 @@ describe("material workflow", () => {
     await assert.rejects(inventory.addMaterial({ name: "", category: "structure", unit: "ton" }), ZodError);
     // it can be requested and ordered straight away
     const order = await inventory.orderDirect({ ...ORDER, projectId: "p1", materialId: sand.id, quantity: 5 });
-    assert.equal((await inventory.receive(order.id)).status, "fulfilled");
+    assert.equal((await inventory.receive({ requestId: order.id })).status, "fulfilled");
   });
 
   it("recording usage reduces stock and increases used", async () => {
@@ -466,7 +497,7 @@ describe("sales", () => {
     assert.equal(back.assignedAt, undefined);
     await assert.rejects(sales.assignLead({ leadId: "nope", agentId: "ag1" }), /Lead not found/);
     await assert.rejects(sales.assignLead({ leadId: lead.id, agentId: "nope" }), /Agent not found/);
-    await sales.removeAgent("ag3");
+    await sales.removeAgent("ag3", { leads: "pool" });
     await assert.rejects(sales.assignLead({ leadId: lead.id, agentId: "ag3" }), /no longer an active agent/);
     await assert.rejects(sales.addLead({ name: "X", phone: "0300-1234567", projectId: "p3", source: "walk-in", email: "bad" }), ZodError);
   });
@@ -857,6 +888,46 @@ describe("projects and managers", () => {
     assert.equal((await projectService.listManagers()).find((m) => m.id === manager.id)?.projectName, "Lake View");
   });
 
+  it("a manager who runs a project is deleted only after a new manager takes it over", async () => {
+    const manager = await projectService.createManager({ name: "Temp Manager" });
+    const project = await projectService.create({ ...details, name: "Temp Tower", managerId: manager.id });
+    await assert.rejects(projectService.deleteManager(manager.id), /Choose or create a new manager/);
+    await assert.rejects(projectService.deleteManager(manager.id, { replacementId: manager.id }), /different manager/);
+    assert.ok(await projectService.findById(project.id)); // nothing was changed by the refusals
+    assert.equal((await projectService.listManagers()).some((m) => m.id === manager.id), true);
+
+    const spare = await projectService.createManager({ name: "Spare Manager" });
+    await projectService.deleteManager(manager.id, { replacementId: spare.id });
+    assert.equal((await projectService.findById(project.id))?.adminName, "Spare Manager");
+    assert.equal((await projectService.listManagers()).some((m) => m.id === manager.id), false);
+
+    await projectService.deleteManager(spare.id, { replacement: { name: "Fresh Manager", phone: "0300-1" } }); // create and assign in one step
+    const after = await projectService.findById(project.id);
+    assert.equal(after?.adminName, "Fresh Manager");
+    assert.equal((await projectService.listManagers()).find((m) => m.id === after?.managerId)?.phone, "0300-1");
+    await assert.rejects(projectService.deleteManager(manager.id), /Manager not found/);
+  });
+
+  it("moving a manager to another project needs a new manager for the project they leave", async () => {
+    const mover = await projectService.createManager({ name: "Mover" });
+    const home = await projectService.create({ ...details, name: "Home Tower", managerId: mover.id });
+    const target = await projectService.create({ ...details, name: "Target Tower" });
+    const move = { ...target, managerId: mover.id };
+    await assert.rejects(projectService.update(target.id, move), /Choose or create a new manager for Home Tower/);
+    assert.equal((await projectService.findById(home.id))?.managerId, mover.id); // nothing changed
+    await assert.rejects(projectService.update(target.id, { ...move, handover: { replacementId: mover.id } }), /different manager/);
+
+    await projectService.update(target.id, { ...move, handover: { replacement: { name: "Backfill", phone: "0300-2" } } });
+    assert.equal((await projectService.findById(target.id))?.adminName, "Mover");
+    assert.equal((await projectService.findById(home.id))?.adminName, "Backfill");
+  });
+
+  it("a manager with no project can be deleted straight away", async () => {
+    const manager = await projectService.createManager({ name: "Idle Manager" });
+    await projectService.deleteManager(manager.id);
+    assert.equal((await projectService.listManagers()).some((m) => m.id === manager.id), false);
+  });
+
   it("makes unique slugs and allows a project without a manager", async () => {
     const first = await projectService.create(details);
     const second = await projectService.create(details);
@@ -877,7 +948,7 @@ describe("projects and managers", () => {
     assert.equal(moved.adminName, "Replacement");
     await assert.rejects(
       projectService.update("p2", { ...(await projects.findById("p2")), managerId: replacement.id }),
-      /already manages/,
+      /Choose or create a new manager for Green Valley Residency/,
     );
     // the old manager is free again
     const freed = (await projectService.listManagers()).find((m) => m.id === "mgr_p1");
@@ -1034,3 +1105,129 @@ describe("projects and managers", () => {
     await sell("commercial", "C-2");
   });
 });
+
+describe("importing leads from a file", () => {
+  const csv = [
+    "Client Name,Mobile,Project,Source,Notes",
+    "Ali Raza,0300-1111111,Green Valley Residency,FB,wants a flat",
+    '"Khan, Sana",0300-2222222,skyline-heights,walk in,',
+    "Usman,0300-3333333,Royal Gardens,,",
+    "Bilal,0300-4444444,Royal Gardens,,",
+    "Ali Again,03001111111,Green Valley Residency,,", // same phone as the first row
+    ",0300-5555555,Royal Gardens,,", // no name
+    "Zara,abc,Royal Gardens,,", // bad phone
+    "Omar,0300-6666666,Nowhere Towers,,", // unknown project
+  ].join("\r\n");
+
+  it("reads the file whatever the column names and order, and quoted cells", () => {
+    const { rows, problem } = readLeadRows(csv);
+    assert.equal(problem, undefined);
+    assert.equal(rows.length, 8);
+    assert.equal(rows[1].name, "Khan, Sana");
+    assert.equal(rows[0].line, 2);
+    assert.match(readLeadRows("name,phone\nA,1").problem ?? "", /Missing: project/);
+    assert.match(readLeadRows("").problem ?? "", /empty/);
+  });
+
+  it("imports the good rows, skips and explains the bad ones, and skips duplicates", async () => {
+    const before = (await sales.listLeads()).length;
+    const result = await sales.importLeads({ defaultSource: "referral", leads: readLeadRows(csv).rows });
+    assert.equal(result.imported, 4);
+    assert.equal(result.duplicates, 1);
+    assert.deepEqual(result.errors.map((e) => e.line), [7, 8, 9]);
+    assert.match(result.errors[2].message, /no project called "Nowhere Towers"/);
+    assert.deepEqual(result.byProject.map((p) => [p.projectName, p.count]), [["Green Valley Residency", 1], ["Skyline Heights", 1], ["Royal Gardens", 2]]);
+    const leads = await sales.listLeads();
+    assert.equal(leads.length, before + 4);
+    const ali = leads.find((l) => l.name === "Ali Raza")!;
+    assert.equal(ali.source, "facebook"); // FB is understood
+    assert.equal(ali.agentId, null);
+    assert.equal(leads.find((l) => l.name === "Usman")!.source, "referral"); // the default for a row without a source
+    assert.equal((await sales.importLeads({ leads: readLeadRows(csv).rows })).imported, 0); // a second upload adds nothing
+    await assert.rejects(sales.importLeads({ leads: [] }), /no leads/);
+  });
+
+  it("counts one phone written in different ways (Excel drops the leading 0) as one lead", async () => {
+    const rows = ["0300-1234501", "+92 300 1234501", "3001234501", "03001234501"].map((phone, n) => ({ line: n + 2, name: `Same Person ${n}`, phone, project: "Royal Gardens" }));
+    const result = await sales.importLeads({ leads: rows });
+    assert.equal(result.imported, 1);
+    assert.equal(result.duplicates, 3);
+    assert.equal((await sales.importLeads({ leads: [{ line: 2, name: "Again", phone: "3001234501", project: "Royal Gardens" }] })).duplicates, 1); // also against what is already there
+    assert.equal((await sales.importLeads({ leads: [{ line: 2, name: "Other project", phone: "3001234501", project: "Skyline Heights" }] })).imported, 1); // another project is a different lead
+  });
+
+  it("gives every lead of a project to one agent, or shares one project's leads equally", async () => {
+    await sales.importLeads({ leads: readLeadRows(csv).rows });
+    const unassigned = (id: string) => sales.listLeads().then((l) => l.filter((x) => x.projectId === id && x.agentId === null).length);
+    const before = await unassigned("p3");
+    assert.ok(before >= 2);
+    const given = await sales.assignProject({ projectId: "p3", agentId: "ag2" });
+    assert.equal(given.assigned, before);
+    assert.equal(await unassigned("p3"), 0);
+    assert.ok((await sales.listLeads()).filter((l) => l.projectId === "p3" && l.agentId === null).length === 0);
+    await assert.rejects(sales.assignProject({ projectId: "p3", agentId: "ag2" }), /no leads to give/);
+
+    const p1Before = await unassigned("p1");
+    const shared = await sales.assignEqually({ projectId: "p1", agentIds: ["ag1", "ag3"] });
+    assert.equal(shared.assigned, p1Before);
+    assert.equal(await unassigned("p1"), 0);
+    assert.ok(shared.perAgent.every((a) => Math.abs(a.count - shared.assigned / 2) <= 1));
+
+    const taken = await sales.assignProject({ projectId: "p3", agentId: "ag1", includeAssigned: true }); // takes them from ag2 too
+    assert.ok(taken.assigned >= 2);
+  });
+});
+
+describe("removing an agent who has leads", () => {
+  const openOf = async (agentId: string) => (await sales.listLeads()).filter((l) => l.agentId === agentId && l.status !== "won" && l.status !== "lost");
+
+  it("is refused until the agent's open leads are given to someone or put back in not forwarded", async () => {
+    const open = (await openOf("ag1")).length;
+    assert.ok(open > 0);
+    await assert.rejects(sales.removeAgent("ag1"), new RegExp(`has ${open} open leads`));
+    assert.equal((await sales.listAgents()).find((a) => a.id === "ag1")?.active, true); // nothing changed
+    await assert.rejects(sales.removeAgent("ag1", { leads: "transfer" }), /Choose the agent who takes the leads/);
+    await assert.rejects(sales.removeAgent("ag1", { leads: "transfer", toAgentId: "ag1" }), /different agent/);
+    await assert.rejects(sales.removeAgent("ag1", { leads: "transfer", toAgentId: "nope" }), /Agent not found/);
+  });
+
+  it("gives the open leads to another agent; sold and lost leads stay for the reports", async () => {
+    const before = await openOf("ag1");
+    const kept = (await sales.listLeads()).filter((l) => l.agentId === "ag1" && (l.status === "won" || l.status === "lost")).length;
+    const result = await sales.removeAgent("ag1", { leads: "transfer", toAgentId: "ag2" });
+    assert.equal(result.moved, before.length);
+    assert.equal((await openOf("ag1")).length, 0);
+    const moved = (await sales.listLeads()).filter((l) => before.some((b) => b.id === l.id));
+    assert.ok(moved.every((l) => l.agentId === "ag2" && l.assignedAt === today()));
+    assert.equal((await sales.listLeads()).filter((l) => l.agentId === "ag1").length, kept);
+    assert.equal((await sales.listAgents()).find((a) => a.id === "ag1")?.active, false);
+    await assert.rejects(sales.removeAgent("ag3", { leads: "transfer", toAgentId: "ag1" }), /no longer an active agent/); // not to a removed agent
+  });
+
+  it("puts the open leads back in not forwarded, and they can be shared again", async () => {
+    const before = await openOf("ag1");
+    const unassigned = (await sales.listLeads()).filter((l) => l.agentId === null).length;
+    await sales.removeAgent("ag1", { leads: "pool" });
+    const after = await sales.listLeads();
+    assert.equal(after.filter((l) => l.agentId === null).length, unassigned + before.length);
+    assert.ok(after.filter((l) => before.some((b) => b.id === l.id)).every((l) => l.agentId === null && l.assignedAt === undefined));
+    const shared = await sales.assignEqually({});
+    assert.ok(shared.assigned >= before.length);
+    assert.ok(shared.perAgent.every((a) => a.agentId !== "ag1")); // a removed agent gets nothing
+  });
+
+  it("an agent with no open leads is removed at once, and leads left with a removed agent count as not forwarded", async () => {
+    const agent = await sales.addAgent({ name: "Idle Agent", commissionRate: 1, managerId: "sm1" });
+    assert.deepEqual(await sales.removeAgent(agent.id), { moved: 0 });
+
+    // an older removal that left leads behind (before this rule): they are shared again like any not forwarded lead
+    const stuck = await sales.addAgent({ name: "Stuck Agent", commissionRate: 1, managerId: "sm1" });
+    const lead = await sales.addLead({ name: "Stuck Lead", phone: "0300-7778888", projectId: "p1", source: "walk-in", agentId: stuck.id });
+    const raw = new MockSalesRepository();
+    await raw.saveAgent({ ...stuck, active: false });
+    const result = await sales.assignEqually({ leadIds: undefined, agentIds: ["ag2", "ag3"], projectId: "p1" });
+    assert.ok((await sales.listLeads()).find((l) => l.id === lead.id)?.agentId !== stuck.id);
+    assert.ok(result.assigned >= 1);
+  });
+});
+

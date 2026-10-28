@@ -5,6 +5,7 @@ import type { Material, MaterialRequest, RequestStatus, StockItem } from "@/mode
 import type { AssignmentStatus, AttendanceRecord, PayrollPayment, Worker, WorkAssignment } from "@/models/hr";
 import type { Agent, Campaign, Lead, LeadContact, LeadStatus, MonthlyReportSnapshot, Sale, SalesManager } from "@/models/sales";
 import type { ChangeRequest, ChangeStatus } from "@/models/changes";
+import type { Installment } from "@/models/finance";
 import type { PortalInfo } from "@/models/site";
 
 export interface SiteRepository {
@@ -22,6 +23,7 @@ export interface ManagerRepository {
   list(): Promise<Manager[]>;
   find(id: string): Promise<Manager | null>;
   save(manager: Manager): Promise<Manager>;
+  remove(id: string): Promise<boolean>;
 }
 
 export interface AccountRepository {
@@ -70,6 +72,13 @@ export interface SalesRepository {
   setLeadStatus(id: string, status: LeadStatus): Promise<Lead | null>;
   listSales(): Promise<Sale[]>;
   saveSale(sale: Sale): Promise<Sale>;
+}
+
+export interface FinanceRepository {
+  list(filter?: { saleId?: string; projectId?: string }): Promise<Installment[]>;
+  find(id: string): Promise<Installment | null>;
+  saveAll(items: Installment[]): Promise<Installment[]>;
+  removeAll(ids: string[]): Promise<void>;
 }
 
 export interface ChangeRequestRepository {

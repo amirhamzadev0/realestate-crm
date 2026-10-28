@@ -1,4 +1,4 @@
-export type Role = "superadmin" | "project-admin" | "warehouse" | "sales" | "agent";
+export type Role = "superadmin" | "project-admin" | "warehouse" | "sales" | "agent" | "finance";
 
 export interface NavItem {
   label: string;

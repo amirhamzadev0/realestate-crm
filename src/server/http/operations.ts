@@ -8,6 +8,7 @@ import {
   accountService,
   authService,
   changeRequestService,
+  financeService,
   hrService,
   inventoryService,
   projectService,
@@ -28,6 +29,8 @@ export type Operation =
       /** A project admin is pinned to their own project: `projectId` is filled in, a different one is refused. */
       projectScoped?: boolean;
       handler: (input: Input, user: AuthUser) => Promise<unknown>;
+      /** A larger request body than the default, for an operation that carries a whole file. */
+      maxBodyBytes?: number;
     };
 
 const projectIdQuery = z.object({ projectId: z.string().min(1) });
@@ -36,6 +39,7 @@ const ADMIN: Role[] = ["superadmin"];
 const PROJECT: Role[] = ["superadmin", "project-admin"];
 const STORE: Role[] = ["superadmin", "warehouse"];
 const SALES: Role[] = ["superadmin", "sales"];
+const FINANCE: Role[] = ["superadmin", "finance"];
 const STORE_AND_SITE: Role[] = ["superadmin", "warehouse", "project-admin"];
 const PEOPLE_REQUESTERS: Role[] = ["superadmin", "project-admin", "sales"];
 const SALES_AND_AGENT: Role[] = ["superadmin", "sales", "agent"];
@@ -157,10 +161,15 @@ export const operations: Record<string, Operation> = {
     handler: (i, user) =>
       // A project manager can only receive orders of their own project.
       inventoryService.receive(
-        z.object({ requestId: z.string().min(1) }).parse(i).requestId,
+        i,
         user.role === "project-admin" ? (user.projectId ?? "") : undefined,
       ),
   },
+  // Instalments of units sold on a payment plan: the Finance department takes the money in and follows buyers up.
+  receiveInstallment: { method: "POST", access: FINANCE, handler: (i) => financeService.receive(i) },
+  logInstallmentContact: { method: "POST", access: FINANCE, handler: (i) => financeService.logContact(i) },
+  editInstallmentPlan: { method: "POST", access: FINANCE, handler: (i) => financeService.editPlan(i) },
+  rescheduleInstallment: { method: "POST", access: FINANCE, handler: (i) => financeService.reschedule(i) },
   recordMaterialUsage: { method: "POST", access: PROJECT, projectScoped: true, handler: (i) => inventoryService.recordUsage(i) },
   addMaterial: { method: "POST", access: STORE, handler: (i) => inventoryService.addMaterial(i) },
   // People (workers, labour, agents) are only ever changed through a request the Super Admin approves.
@@ -208,6 +217,14 @@ export const operations: Record<string, Operation> = {
     access: ADMIN,
     handler: (i) => projectService.updateManager(z.object({ id: z.string().min(1) }).parse(i).id, i),
   },
+  deleteManager: {
+    method: "POST",
+    access: ADMIN,
+    handler: async (i) => {
+      await projectService.deleteManager(z.object({ id: z.string().min(1) }).parse(i).id, i);
+      return { removed: true };
+    },
+  },
   payPayroll: { method: "POST", access: ADMIN, handler: (i) => hrService.pay(i) },
   cancelTask: {
     method: "POST",
@@ -243,8 +260,8 @@ export const operations: Record<string, Operation> = {
     method: "POST",
     access: SALES,
     handler: async (i) => {
-      await salesService.removeAgent(z.object({ id: z.string().min(1) }).parse(i).id);
-      return { removed: true };
+      const { moved } = await salesService.removeAgent(z.object({ id: z.string().min(1) }).parse(i).id, i);
+      return { removed: true, moved };
     },
   },
   addLead: { method: "POST", access: SALES, handler: (i) => salesService.addLead(i) },
@@ -294,6 +311,8 @@ export const operations: Record<string, Operation> = {
     handler: (i) => salesService.saveMonthlyReport(z.object({ period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) }).parse(i).period),
   },
   assignLead: { method: "POST", access: SALES, handler: (i) => salesService.assignLead(i) },
+  importLeads: { method: "POST", access: SALES, maxBodyBytes: 2 * 1024 * 1024, handler: (i) => salesService.importLeads(i) },
+  assignProjectLeads: { method: "POST", access: SALES, handler: (i) => salesService.assignProject(i) },
   assignLeadsEqually: { method: "POST", access: SALES, handler: (i) => salesService.assignEqually(i) },
   recordSale: { method: "POST", access: SALES, handler: (i) => salesService.recordSale(i) },
 };

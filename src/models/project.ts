@@ -44,6 +44,7 @@ export interface Project {
   status: ProjectStatus;
   startDate: string; // ISO date
   totalUnits: number;
+  totalArea: number; // the whole site: sq ft for a high-rise, marla for a land plotting; 0 when not entered
   budget: number;
   managerId: string | null; // the Manager running this project
   adminName: string; // that manager's name, kept in step with the Manager record ("Unassigned" when none)

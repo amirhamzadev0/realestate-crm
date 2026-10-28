@@ -6,6 +6,7 @@ export const superAdminNav: NavItem[] = [
   { label: "Approvals", href: "/superadmin/approvals", icon: "ClipboardCheck" },
   { label: "Direct sales", href: "/superadmin/direct-sales", icon: "BadgeDollarSign" },
   { label: "Orders", href: "/warehouse", icon: "Truck" },
+  { label: "Finance", href: "/finance", icon: "Landmark" },
   { label: "Sales", href: "/sales", icon: "Handshake" },
   { label: "Sales team", href: "/superadmin/sales-team", icon: "UserRoundCheck" },
   { label: "Agent reports", href: "/superadmin/agent-reports", icon: "ChartNoAxesColumn" },
@@ -13,6 +14,16 @@ export const superAdminNav: NavItem[] = [
 
 export const warehouseNav: NavItem[] = [
   { label: "Orders", href: "/warehouse", icon: "Truck" },
+  { label: "Super Admin", href: "/superadmin", icon: "Crown" },
+];
+
+/** The Finance department: instalments of units sold on a payment plan. */
+export const financeNav: NavItem[] = [
+  { label: "Overview", href: "/finance", icon: "LayoutDashboard" },
+  { label: "Instalments", href: "/finance/installments", icon: "BellRing", badge: "follow-ups" },
+  { label: "Ledgers", href: "/finance/ledgers", icon: "Wallet" },
+  { label: "Booked units", href: "/finance/sales", icon: "Building2" },
+  { label: "Edit instalments", href: "/finance/edit", icon: "ClipboardCheck" },
   { label: "Super Admin", href: "/superadmin", icon: "Crown" },
 ];
 

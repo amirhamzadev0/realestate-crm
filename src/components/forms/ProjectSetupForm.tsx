@@ -37,8 +37,10 @@ interface ProjectPayload {
   status: string;
   startDate: string;
   budget: number;
+  totalArea: number;
   totalUnits?: number;
   managerId: string | null;
+  handover?: { replacementId?: string; replacement?: { name: string; phone: string; email: string } };
   rates: { category: PlotCategory; rate: number; units?: number }[];
   units: { category: PlotCategory; floor: string; unit: string; area: number }[];
 }
@@ -76,7 +78,18 @@ export function ProjectSetupForm({ project, managers }: { project?: Project; man
   const [done, setDone] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
-  const freeManagers = managers.filter((m) => m.active && (m.projectId === null || m.projectId === project?.id));
+  // Any active manager can be chosen. One who runs another project must be replaced there first (see the hand-over panel).
+  const assignable = managers.filter((m) => m.active);
+  const [managerId, setManagerId] = useState(project?.managerId ?? "");
+  const chosen = managers.find((m) => m.id === managerId);
+  const takesFrom = chosen && chosen.projectId && chosen.projectId !== project?.id ? chosen : null; // the manager being moved from another project
+  const spare = managers.filter((m) => m.active && m.projectId === null && m.id !== managerId);
+  const [handMode, setHandMode] = useState<"existing" | "new">("new");
+  const [handId, setHandId] = useState("");
+  const [handName, setHandName] = useState("");
+  const [handPhone, setHandPhone] = useState("");
+  const [handEmail, setHandEmail] = useState("");
+  const mode = handMode === "existing" && spare.length ? "existing" : "new";
   const unit = saleUnit[type];
   const highRise = type === "high-rise";
   const countOf = (category: PlotCategory) => rows.filter((r) => r.category === category).length;
@@ -178,8 +191,12 @@ export function ProjectSetupForm({ project, managers }: { project?: Project; man
       status: text("status"),
       startDate: text("startDate"),
       budget: Number(text("budget")),
+      totalArea: Number(text("totalArea")) || 0,
       ...(!highRise && totalUnits !== "" ? { totalUnits: Number(totalUnits) } : {}),
-      managerId: text("managerId") || null,
+      managerId: managerId || null,
+      ...(takesFrom
+        ? { handover: mode === "existing" ? { replacementId: handId } : { replacement: { name: handName.trim(), phone: handPhone.trim(), email: handEmail.trim() } } }
+        : {}),
       rates,
       units: highRise ? rows.map((r) => ({ category: r.category, floor: r.floor.trim(), unit: r.unit.trim(), area: Number(r.area) })) : [],
     };
@@ -188,12 +205,22 @@ export function ProjectSetupForm({ project, managers }: { project?: Project; man
   /** What must be right before the review page makes sense; the server checks everything again on confirm. */
   function problemWith(body: ProjectPayload): string {
     if (body.rates.length === 0) return "Give a price to at least one plot type.";
+    const handoverProblem = handover(body);
+    if (handoverProblem) return handoverProblem;
     if (!highRise) return "";
     if (body.units.length === 0) return "Add at least one floor with its units.";
     const priced = new Set(body.rates.map((r) => r.category));
     const missing = plotCategories.find((c) => countOf(c) > 0 && !priced.has(c));
     if (missing) return `Give a price to the ${categoryLabels[missing]} units.`;
     if (body.units.some((u) => !u.floor || !u.unit || !(u.area > 0))) return "Every unit needs a floor, a number and a size in sq ft.";
+    return "";
+  }
+
+  /** The manager moved from another project needs someone to take that project over. */
+  function handover(body: ProjectPayload): string {
+    if (!takesFrom) return "";
+    if (body.handover?.replacementId === "") return `Choose who takes over ${takesFrom.projectName}.`;
+    if (body.handover?.replacement && !body.handover.replacement.name) return `Enter the name of the new manager for ${takesFrom.projectName}.`;
     return "";
   }
 
@@ -207,6 +234,11 @@ export function ProjectSetupForm({ project, managers }: { project?: Project; man
       setRows([]);
       setDrafts({});
       setOpenFloors({});
+      setManagerId("");
+      setHandId("");
+      setHandName("");
+      setHandPhone("");
+      setHandEmail("");
       formRef.current?.reset();
     } else if (!ok) {
       setReview(null); // back to the form so the problem can be fixed
@@ -217,7 +249,9 @@ export function ProjectSetupForm({ project, managers }: { project?: Project; man
     event.preventDefault();
     const body = buildPayload(event.currentTarget);
     if (editing) {
-      void send(body);
+      const problem = handover(body);
+      setReviewError(problem);
+      if (!problem) void send(body);
       return;
     }
     const problem = problemWith(body);
@@ -266,16 +300,63 @@ export function ProjectSetupForm({ project, managers }: { project?: Project; man
           <input name="budget" type="number" min={0} step="any" required defaultValue={project ? String(project.budget) : undefined} />
         </label>
         <label className="field">
+          <span className="field__label">Total area of the project ({unit.area})</span>
+          <input name="totalArea" type="number" min={0} step="any" placeholder="optional" defaultValue={project?.totalArea ? String(project.totalArea) : undefined} />
+        </label>
+        <label className="field">
           <span className="field__label">Manager</span>
-          <select name="managerId" defaultValue={project?.managerId ?? ""}>
+          <select value={managerId} onChange={(event) => setManagerId(event.target.value)}>
             <option value="">None</option>
-            {freeManagers.map((m) => (
+            {assignable.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}
+                {m.projectId && m.projectId !== project?.id ? ` (runs ${m.projectName})` : ""}
               </option>
             ))}
           </select>
         </label>
+        {takesFrom ? (
+          <div className="review">
+            <strong>
+              {takesFrom.name} runs {takesFrom.projectName}. Give {takesFrom.projectName} a new manager first; then {takesFrom.name} moves here.
+            </strong>
+            <label className="field">
+              <span className="field__label">New manager for {takesFrom.projectName}</span>
+              <select value={mode} onChange={(event) => setHandMode(event.target.value as "existing" | "new")}>
+                {spare.length ? <option value="existing">Pick an existing manager</option> : null}
+                <option value="new">Create a new manager</option>
+              </select>
+            </label>
+            {mode === "existing" ? (
+              <label className="field">
+                <span className="field__label">Manager who takes over</span>
+                <select value={handId} onChange={(event) => setHandId(event.target.value)}>
+                  <option value="">Choose...</option>
+                  {spare.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <div className="form__grid">
+                <label className="field">
+                  <span className="field__label">Name</span>
+                  <input type="text" value={handName} onChange={(event) => setHandName(event.target.value)} />
+                </label>
+                <label className="field">
+                  <span className="field__label">Phone</span>
+                  <input type="text" value={handPhone} onChange={(event) => setHandPhone(event.target.value)} />
+                </label>
+                <label className="field">
+                  <span className="field__label">Email</span>
+                  <input type="text" value={handEmail} onChange={(event) => setHandEmail(event.target.value)} />
+                </label>
+              </div>
+            )}
+          </div>
+        ) : null}
         {!highRise ? (
           <label className="field">
             <span className="field__label">Total units (the plots of all types added up)</span>
@@ -563,7 +644,9 @@ function ReviewPanel({
         <div><dt>Status</dt><dd>{body.status.replace("-", " ")}</dd></div>
         <div><dt>Start date</dt><dd>{body.startDate}</dd></div>
         <div><dt>Budget</dt><dd>{formatMoney(body.budget)}</dd></div>
+        <div><dt>Total area</dt><dd>{body.totalArea > 0 ? `${formatNumber(body.totalArea)} ${highRise ? "sq ft" : "marla"}` : "Not entered"}</dd></div>
         <div><dt>Manager</dt><dd>{manager}</dd></div>
+        {body.handover ? <div><dt>New manager of the old project</dt><dd>{body.handover.replacement?.name ?? managers.find((m) => m.id === body.handover?.replacementId)?.name}</dd></div> : null}
         <div><dt>Total units</dt><dd>{formatNumber(total)}</dd></div>
       </dl>
       <div className="table-wrap">

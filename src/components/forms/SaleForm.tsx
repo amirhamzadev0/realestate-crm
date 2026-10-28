@@ -7,6 +7,8 @@ import type { Lead, SalesManager } from "@/models/sales";
 /** A lead an agent can sell: choosing it fills in the buyer. */
 export type SaleLead = Pick<Lead, "id" | "name" | "phone" | "email">;
 import { formatMoney, formatNumber } from "@/utils/format";
+import { localDate } from "@/utils/date";
+import { buildPlan, type PlanInput } from "@/utils/installments";
 import { discountProblem, priceUnit, type DiscountMode } from "@/utils/pricing";
 import { useActionViewModel } from "@/viewmodels/useActionViewModel";
 
@@ -56,6 +58,7 @@ export function SaleForm({
   const { run, busy, error } = useActionViewModel(mode === "direct" ? "recordDirectSale" : mode === "lead" ? "recordAgentSale" : "recordSale");
   const [resetKey, setResetKey] = useState(0);
   const [done, setDone] = useState(false);
+  const [lastWasPlan, setLastWasPlan] = useState(false);
 
   const [projectId, setProjectId] = useState(fixedProjectId ?? projects[0]?.id ?? "");
   const project = projects.find((p) => p.id === projectId);
@@ -68,6 +71,15 @@ export function SaleForm({
   const [area, setArea] = useState("");
   const [discountMode, setDiscountMode] = useState<DiscountMode>("none");
   const [discountValue, setDiscountValue] = useState("");
+
+  // How the buyer pays: everything now (cash), or a down payment and instalments (a payment plan).
+  const [payment, setPayment] = useState<"cash" | "installment">("cash");
+  const [downPercent, setDownPercent] = useState("20");
+  const [years, setYears] = useState("3");
+  const [dueDay, setDueDay] = useState("10");
+  const [balloonAmount, setBalloonAmount] = useState("");
+  const [balloonEvery, setBalloonEvery] = useState("6");
+  const [possessionAmount, setPossessionAmount] = useState("");
 
   // The buyer. Choosing one of the agent's leads fills in the client's name, phone and email; the CNIC is typed in.
   const startLead = leads.find((l) => l.id === defaultLeadId);
@@ -122,6 +134,21 @@ export function SaleForm({
   const problem =
     preview && rate !== undefined ? discountProblem(preview.listPrice, rate, effectiveMode, discountNumber) : null;
 
+  const months = Math.round(Number(years) * 12);
+  const planInput: PlanInput | null =
+    payment === "installment" && direct
+      ? {
+          downPaymentPercent: Number(downPercent),
+          months,
+          dueDay: Number(dueDay),
+          ...(Number(balloonAmount) > 0 ? { balloonAmount: Number(balloonAmount), balloonEveryMonths: Number(balloonEvery) } : {}),
+          ...(Number(possessionAmount) > 0 ? { possessionAmount: Number(possessionAmount) } : {}),
+        }
+      : null;
+  const builtPlan = planInput && preview && !problem ? buildPlan(preview.price, planInput, localDate()) : null;
+  const planProblem = builtPlan && "problem" in builtPlan ? builtPlan.problem : null;
+  const plan = builtPlan && !("problem" in builtPlan) ? builtPlan : null;
+
   function chooseProject(id: string) {
     setProjectId(id);
     setCategory("");
@@ -150,8 +177,10 @@ export function SaleForm({
       ...(picksUnit ? {} : { area: Number(area) }),
       ...Object.fromEntries(Object.entries(buyer).filter(([, v]) => v !== "")),
       ...(direct && discountMode !== "none" ? { discountMode, discountValue: discountNumber } : {}),
+      ...(planInput ? { paymentPlan: planInput } : {}),
     });
     setDone(ok);
+    setLastWasPlan(payment === "installment");
     if (ok) {
       setCategory("");
       setFloor("");
@@ -159,6 +188,7 @@ export function SaleForm({
       setArea("");
       setDiscountMode("none");
       setDiscountValue("");
+      setPayment("cash");
       setLeadId("");
       setBuyerName("");
       setBuyerPhone("");
@@ -371,6 +401,71 @@ export function SaleForm({
         </div>
       ) : null}
 
+      {direct ? (
+        <div className="form__grid">
+          <label className="field">
+            <span className="field__label">How will the buyer pay?</span>
+            <select value={payment} onChange={(event) => setPayment(event.target.value as "cash" | "installment")}>
+              <option value="cash">Cash - the full price now</option>
+              <option value="installment">Instalments - a down payment, then a monthly plan</option>
+            </select>
+          </label>
+          {payment === "installment" ? (
+            <>
+              <label className="field">
+                <span className="field__label">Down payment (% of the price)</span>
+                <input type="number" min={1} max={99} step="any" required value={downPercent} onChange={(event) => setDownPercent(event.target.value)} />
+              </label>
+              <label className="field">
+                <span className="field__label">Plan length (years)</span>
+                <input type="number" min={0.25} max={30} step="any" required value={years} onChange={(event) => setYears(event.target.value)} />
+              </label>
+              <label className="field">
+                <span className="field__label">Instalment due on (day of the month)</span>
+                <input type="number" min={1} max={28} step="1" required value={dueDay} onChange={(event) => setDueDay(event.target.value)} />
+              </label>
+              <label className="field">
+                <span className="field__label">Extra payment (PKR, optional)</span>
+                <input type="number" min={0} step="any" value={balloonAmount} onChange={(event) => setBalloonAmount(event.target.value)} />
+              </label>
+              {Number(balloonAmount) > 0 ? (
+                <label className="field">
+                  <span className="field__label">Extra payment every (months)</span>
+                  <input type="number" min={1} step="1" value={balloonEvery} onChange={(event) => setBalloonEvery(event.target.value)} />
+                </label>
+              ) : null}
+              <label className="field">
+                <span className="field__label">Payment on possession (PKR, optional)</span>
+                <input type="number" min={0} step="any" value={possessionAmount} onChange={(event) => setPossessionAmount(event.target.value)} />
+              </label>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
+      {payment === "installment" && preview ? (
+        <div className="price-preview" aria-live="polite">
+          {plan ? (
+            <>
+              <span>Down payment today: {formatMoney(plan.down)}</span>
+              <span>
+                {months} monthly instalments of {formatMoney(plan.monthly)} on the {dueDay}
+                {Number(dueDay) === 1 ? "st" : Number(dueDay) === 2 ? "nd" : Number(dueDay) === 3 ? "rd" : "th"} of each month
+              </span>
+              {plan.balloons > 0 ? (
+                <span>
+                  {plan.balloons} extra payments of {formatMoney(Number(balloonAmount))} (every {balloonEvery} months)
+                </span>
+              ) : null}
+              {Number(possessionAmount) > 0 ? <span>On possession: {formatMoney(Number(possessionAmount))}</span> : null}
+              <strong>Total: {formatMoney(preview.price)}. The unit stays booked until the last instalment is paid.</strong>
+            </>
+          ) : (
+            <span className="form__error">{planProblem ?? "Fill in the plan"}</span>
+          )}
+        </div>
+      ) : null}
+
       {noUnitsLeft ? <p className="form__error">No unit of this project is free to sell.</p> : null}
       {error ? (
         <p className="form__error" role="alert">
@@ -378,10 +473,14 @@ export function SaleForm({
         </p>
       ) : null}
       {done && !error ? (
-        <p className="form__success">Sold. The unit is off the available units and the amount is credited to the project.</p>
+        <p className="form__success">
+          {lastWasPlan
+            ? "Booked. The unit is off the available units and the down payment is credited to the project. The Finance department follows the instalments up."
+            : "Sold. The unit is off the available units and the amount is credited to the project."}
+        </p>
       ) : null}
-      <button type="submit" className="button" disabled={busy || noUnitsLeft || !!problem || (picksUnit && !chosenUnit)}>
-        {busy ? "Saving..." : mode === "lead" ? "Sell to this client" : direct ? "Sell this unit" : "Record sale"}
+      <button type="submit" className="button" disabled={busy || noUnitsLeft || !!problem || !!planProblem || (picksUnit && !chosenUnit)}>
+        {busy ? "Saving..." : payment === "installment" ? "Book this unit" : mode === "lead" ? "Sell to this client" : direct ? "Sell this unit" : "Record sale"}
       </button>
     </form>
   );

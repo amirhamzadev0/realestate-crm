@@ -24,7 +24,8 @@ async function run(request: NextRequest, { params }: RouteContext, method: "GET"
     let input: Record<string, unknown>;
     if (method === "POST") {
       if (!isAllowedOrigin(request)) return reply({ error: "Forbidden origin" }, 403);
-      if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) return reply({ error: "Request too large" }, 413);
+      const limit = operation.access === "public" ? MAX_BODY_BYTES : (operation.maxBodyBytes ?? MAX_BODY_BYTES);
+      if (Number(request.headers.get("content-length") ?? 0) > limit) return reply({ error: "Request too large" }, 413);
       const body: unknown = await request.json().catch(() => null);
       if (typeof body !== "object" || body === null || Array.isArray(body)) {
         return reply({ error: "Expected a JSON object body" }, 400);
@@ -59,6 +60,8 @@ async function run(request: NextRequest, { params }: RouteContext, method: "GET"
     console.error(error);
     // A database that cannot be reached is a temporary failure, not a bug in the request.
     const code = (error as { code?: string }).code ?? "";
+    // Two requests for the same thing met at the database: the first one won; tell the second so instead of failing with a 500.
+    if (code === "ER_DUP_ENTRY") return reply({ error: "This was already recorded. Reload the page and check before trying again." }, 409);
     if (/^(ECONN|ETIMEDOUT|PROTOCOL_CONNECTION_LOST|ER_ACCESS_DENIED|ER_BAD_DB)/.test(code)) {
       return reply({ error: "Database unavailable" }, 503);
     }

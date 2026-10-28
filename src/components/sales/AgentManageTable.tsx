@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ActionButton } from "@/components/forms/ActionButton";
+import { AgentRemover } from "@/components/forms/AgentRemover";
 import { AgentEditForm } from "@/components/forms/AgentForm";
 import { EmptyState } from "@/components/ui/PageHeader";
 import type { Agent, AgentPerformance, SalesManager } from "@/models/sales";
@@ -10,8 +10,10 @@ export function AgentManageTable({
   agents,
   performance,
   managers,
+  openLeads,
 }: {
   agents: (Agent & { managerName: string })[];
+  openLeads: Record<string, number>;
   performance: AgentPerformance[];
   managers: SalesManager[];
 }) {
@@ -60,13 +62,7 @@ export function AgentManageTable({
                       <summary className="button button--ghost button--small">Edit</summary>
                       <AgentEditForm agent={agent} managers={managers} />
                     </details>
-                    <ActionButton
-                      operation="removeAgent"
-                      body={{ id: agent.id }}
-                      label="Remove"
-                      variant="danger"
-                      confirm={`Remove ${agent.name}? Their past sales and commission stay in the reports.`}
-                    />
+                    <AgentRemover agent={agent} openLeads={openLeads[agent.id] ?? 0} otherAgents={agents.filter((a) => a.id !== agent.id)} />
                   </div>
                 </td>
               </tr>

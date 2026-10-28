@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { NewMaterialForm } from "@/components/forms/NewMaterialForm";
 import { OrderMaterialForm } from "@/components/forms/OrderMaterialForm";
 import { PaymentsDueTable } from "@/components/inventory/PaymentsDueTable";
@@ -11,7 +12,7 @@ import { getOrdersPage } from "@/viewmodels/warehouse.viewmodel";
 export const metadata: Metadata = { title: "Orders" };
 
 export default async function OrdersPage() {
-  const { materials, projects, onOrder, paymentsDue, awaitingApproval, history } = await getOrdersPage();
+  const { materials, projects, onOrder, paymentsDue, awaitingApproval, history, historyTotal } = await getOrdersPage();
   // Only the Super Admin can cancel an order; the orders desk marks deliveries.
   const canCancel = (await getCurrentUser())?.role === "superadmin";
 
@@ -33,7 +34,14 @@ export default async function OrdersPage() {
       <Card title={`Project requests waiting for the Super Admin (${awaitingApproval.length})`}>
         <RequestTable requests={awaitingApproval} />
       </Card>
-      <Card title="Delivered and rejected">
+      <Card
+        title={`Delivered and rejected (latest ${history.length} of ${historyTotal})`}
+        action={
+          <Link href="/warehouse/history" className="link">
+            View all records
+          </Link>
+        }
+      >
         <RequestTable requests={history} />
       </Card>
       <Card title="Add a material to the list">

@@ -1,5 +1,4 @@
 import { MaterialApprovalActions } from "@/components/forms/MaterialApprovalActions";
-import { ActionButton } from "@/components/forms/ActionButton";
 import { DeliveryActions } from "@/components/forms/DeliveryActions";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/PageHeader";
@@ -63,14 +62,24 @@ export function RequestTable({
               </td>
               <td>
                 <Badge>{request.status}</Badge>
+                {request.status === "ordered" && request.receivedQuantity > 0 ? (
+                  <div className="muted">
+                    {formatNumber(request.receivedQuantity)} arrived, {formatNumber(request.remainingQuantity)} {request.unit} still to come
+                  </div>
+                ) : null}
+                {request.deliveries && request.deliveries.length > 1 ? (
+                  <div className="muted">
+                    Came in {request.deliveries.length} parts: {request.deliveries.map((d) => `${formatNumber(d.quantity)} on ${formatDate(d.date)}`).join(", ")}
+                  </div>
+                ) : null}
               </td>
               <td>
                 {mode === "approve" ? (
                   <MaterialApprovalActions requestId={request.id} />
                 ) : mode === "deliver" ? (
-                  <DeliveryActions requestId={request.id} canCancel={canCancel} />
+                  <DeliveryActions requestId={request.id} canCancel={canCancel} remaining={request.remainingQuantity} unit={request.unit} />
                 ) : mode === "receive" && request.status === "ordered" ? (
-                  <ActionButton operation="receiveMaterial" body={{ requestId: request.id }} label="Mark received" />
+                  <DeliveryActions requestId={request.id} canCancel={false} remaining={request.remainingQuantity} unit={request.unit} />
                 ) : (
                   (request.decisionNote ?? "-")
                 )}
